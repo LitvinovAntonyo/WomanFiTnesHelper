@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     monthly_workout_target: int = 10
     reminder_scan_seconds: int = 30
     log_level: str = "INFO"
+    show_reset_button: bool = True
 
     llm_provider: Literal["template", "groq", "openrouter", "ollama", "openai"] = "template"
     llm_api_key: SecretStr = SecretStr("")

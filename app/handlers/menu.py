@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.context import AppContext
-from app.handlers.start import valid_workout_time
+from app.handlers.start import CONSECUTIVE_DAYS_WARNING, has_consecutive_days, valid_workout_time
 from app.keyboards import days_keyboard, frequency_keyboard, menu_keyboard, settings_keyboard
 from app.services.scheduler import utc_naive_to_local
 from app.states import ScheduleEdit
@@ -134,9 +134,12 @@ def build_menu_router(context: AppContext) -> Router:
 
     @router.callback_query(ScheduleEdit.days, F.data == "schedule:days_done")
     async def edit_days_done(callback: CallbackQuery, state: FSMContext) -> None:
-        if not (await state.get_data()).get("days"):
+        data = await state.get_data()
+        if not data.get("days"):
             await callback.answer("Выбери хотя бы один день.", show_alert=True)
             return
+        if has_consecutive_days(data["days"]) and callback.message:
+            await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
         await state.set_state(ScheduleEdit.workout_time)
         if callback.message:
             await callback.message.answer("Новое время в формате 19:00:")
@@ -175,7 +178,10 @@ def build_menu_router(context: AppContext) -> Router:
         await context.reminders.rebuild_user_reminders(settings.user_id)
         await state.clear()
         if callback.message:
-            await callback.message.answer("Расписание обновлено.", reply_markup=menu_keyboard())
+            await callback.message.answer(
+                "Расписание обновлено.",
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
+            )
         await callback.answer()
 
     return router

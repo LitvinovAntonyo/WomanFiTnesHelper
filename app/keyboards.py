@@ -11,14 +11,16 @@ DAY_NAMES = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 RESET_TODAY_TEXT = "🔄 Сбросить текущий день"
 
 
-def menu_keyboard() -> ReplyKeyboardMarkup:
+def menu_keyboard(show_reset_button: bool = True) -> ReplyKeyboardMarkup:
+    keyboard = [
+        [KeyboardButton(text="🏋️ Начать тренировку")],
+        [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="🥗 Небольшой шаг")],
+        [KeyboardButton(text="⚙️ Настройки")],
+    ]
+    if show_reset_button:
+        keyboard.append([KeyboardButton(text=RESET_TODAY_TEXT)])
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🏋️ Начать тренировку")],
-            [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="🥗 Небольшой шаг")],
-            [KeyboardButton(text="⚙️ Настройки")],
-            [KeyboardButton(text=RESET_TODAY_TEXT)],
-        ],
+        keyboard=keyboard,
         resize_keyboard=True,
         input_field_placeholder="Напиши, если нужна поддержка",
     )

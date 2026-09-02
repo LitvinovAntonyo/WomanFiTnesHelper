@@ -17,9 +17,11 @@ from sqlalchemy import func, select
 from app.context import AppContext
 from app.handlers import build_routers
 from app.handlers import workout as workout_module
+from app.handlers.start import has_consecutive_days
 from app.llm import build_llm_service
 from app.models import ExerciseSetResult, Reminder, WorkoutSessionFeedback
 from app.services.scheduler import ReminderService
+from app.states import ScheduleEdit
 
 
 class RecordingSession(BaseSession):
@@ -87,6 +89,12 @@ def workout_storage_key(bot: Bot) -> StorageKey:
     return StorageKey(bot_id=bot.id, chat_id=10001, user_id=10001)
 
 
+def test_consecutive_day_detection_wraps_across_week():
+    assert not has_consecutive_days([0, 2, 4])
+    assert has_consecutive_days([0, 1, 4])
+    assert has_consecutive_days([0, 6])
+
+
 @pytest.mark.asyncio
 async def test_start_and_complete_onboarding_through_dispatcher(app_services):
     settings, database, users, workouts, progress, _ = app_services
@@ -111,12 +119,14 @@ async def test_start_and_complete_onboarding_through_dispatcher(app_services):
     updates = [
         user_message(1, "/start"),
         user_message(2, "Анна"),
-        callback_update(3, "onboarding:days_done"),
-        user_message(4, "19:00"),
-        callback_update(5, "onboarding:frequency:3"),
-        callback_update(6, "onboarding:place:gym"),
-        callback_update(7, "onboarding:goal:regularity"),
-        callback_update(8, "onboarding:experience:returning"),
+        callback_update(3, "onboarding:day:2"),
+        callback_update(4, "onboarding:day:1"),
+        callback_update(5, "onboarding:days_done"),
+        user_message(6, "19:00"),
+        callback_update(7, "onboarding:frequency:3"),
+        callback_update(8, "onboarding:place:gym"),
+        callback_update(9, "onboarding:goal:regularity"),
+        callback_update(10, "onboarding:experience:returning"),
     ]
     for update in updates:
         await dispatcher.feed_update(bot, update)
@@ -126,10 +136,44 @@ async def test_start_and_complete_onboarding_through_dispatcher(app_services):
     assert user.onboarding_complete
     assert user.display_name == "Анна"
     assert user.settings is not None
-    assert user.settings.workout_days == "0,2,4"
+    assert user.settings.workout_days == "0,1,4"
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("Как тебя называть" in text for text in sent_texts)
     assert any("Главная цель" in text for text in sent_texts)
+    assert any("Лучше оставить между ними день восстановления" in text for text in sent_texts)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_schedule_edit_warns_about_consecutive_days_without_blocking(app_services, onboarded_user):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    await dispatcher.feed_update(bot, callback_update(11, "settings:schedule"))
+    await dispatcher.feed_update(bot, callback_update(12, "schedule:day:2"))
+    await dispatcher.feed_update(bot, callback_update(13, "schedule:day:1"))
+    await dispatcher.feed_update(bot, callback_update(14, "schedule:days_done"))
+
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) == ScheduleEdit.workout_time.state
+    sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("Лучше оставить между ними день восстановления" in text for text in sent_texts)
+    assert any("Новое время" in text for text in sent_texts)
     await llm.close()
     await bot.session.close()
 

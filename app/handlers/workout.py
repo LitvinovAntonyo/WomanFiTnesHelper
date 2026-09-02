@@ -363,7 +363,7 @@ def build_workout_router(context: AppContext) -> Router:
                     f"Общий прогресс этого месяца: {progress.month_completed}/{progress.monthly_target}. "
                     "На сегодня всё — отдельной заминки в плане нет."
                     f"{weight_block}",
-                    reply_markup=menu_keyboard(),
+                    reply_markup=menu_keyboard(context.settings.show_reset_button),
                 )
                 await message.answer(
                     "Насколько комфортной была нагрузка?",
@@ -453,12 +453,12 @@ def build_workout_router(context: AppContext) -> Router:
             await message.answer(
                 "Текущий тренировочный день сброшен. Все тестовые отметки этого дня "
                 "удалены — можно начать его заново.",
-                reply_markup=menu_keyboard(),
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
         else:
             await message.answer(
                 "Сегодняшней тренировки для сброса пока нет.",
-                reply_markup=menu_keyboard(),
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
 
     @router.callback_query(F.data.startswith("reminder:yes:"))
@@ -712,7 +712,7 @@ def build_workout_router(context: AppContext) -> Router:
                 await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.answer(
                 f"Записала: {labels[effort]}. Учту это в следующих тренировках.",
-                reply_markup=menu_keyboard(),
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
         await callback.answer("Оценка сохранена")
 
@@ -864,7 +864,7 @@ def build_workout_router(context: AppContext) -> Router:
         await state.clear()
         await message.answer(
             f"Перенесла на {local_value.strftime('%d.%m.%Y, %H:%M')}. Прогресс сохранён.",
-            reply_markup=menu_keyboard(),
+            reply_markup=menu_keyboard(context.settings.show_reset_button),
         )
 
     return router

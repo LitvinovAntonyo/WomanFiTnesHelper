@@ -17,3 +17,11 @@ def test_allowed_ids_are_parsed_from_env_style_string(monkeypatch):
 def test_database_path_is_extracted():
     settings = Settings(database_url="sqlite+aiosqlite:///data/test.sqlite3")
     assert settings.database_path == Path("data/test.sqlite3")
+
+
+def test_reset_button_setting_can_be_disabled_from_environment(monkeypatch):
+    monkeypatch.setenv("SHOW_RESET_BUTTON", "false")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.show_reset_button is False

@@ -156,6 +156,15 @@ def test_temporary_reset_button_is_available_from_main_menu():
     assert RESET_TODAY_TEXT in labels
 
 
+def test_reset_button_can_be_hidden_from_main_menu():
+    labels = [
+        button.text
+        for row in menu_keyboard(show_reset_button=False).keyboard
+        for button in row
+    ]
+    assert RESET_TODAY_TEXT not in labels
+
+
 def test_machine_rep_ranges_are_shown_in_plan_language():
     assert repetitions_text("seated_leg_curl", 15) == "12–15 повторений"
     assert repetitions_text("hip_abduction", 20) == "15–20 повторений"

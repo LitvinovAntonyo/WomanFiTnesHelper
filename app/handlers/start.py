@@ -11,6 +11,16 @@ from app.context import AppContext
 from app.keyboards import choices_keyboard, days_keyboard, frequency_keyboard, menu_keyboard
 from app.states import Onboarding
 
+CONSECUTIVE_DAYS_WARNING = (
+    "Все три тренировки нагружают ноги и ягодицы. Лучше оставить между ними день "
+    "восстановления, например Пн–Ср–Пт."
+)
+
+
+def has_consecutive_days(days: list[int]) -> bool:
+    selected = set(days)
+    return any((day + 1) % 7 in selected for day in selected)
+
 
 def valid_workout_time(value: str) -> bool:
     try:
@@ -31,7 +41,7 @@ def build_start_router(context: AppContext) -> Router:
             await state.clear()
             await message.answer(
                 f"Рада тебя видеть, {user.display_name or 'друг'}! Что сделаем?",
-                reply_markup=menu_keyboard(),
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
             return
         await state.set_state(Onboarding.name)
@@ -42,7 +52,10 @@ def build_start_router(context: AppContext) -> Router:
     @router.message(Command("cancel"))
     async def cancel(message: Message, state: FSMContext) -> None:
         await state.clear()
-        await message.answer("Текущий ввод отменён.", reply_markup=menu_keyboard())
+        await message.answer(
+            "Текущий ввод отменён.",
+            reply_markup=menu_keyboard(context.settings.show_reset_button),
+        )
 
     @router.message(Onboarding.name, F.text)
     async def receive_name(message: Message, state: FSMContext) -> None:
@@ -78,6 +91,8 @@ def build_start_router(context: AppContext) -> Router:
         if not data.get("days"):
             await callback.answer("Выбери хотя бы один день.", show_alert=True)
             return
+        if has_consecutive_days(data["days"]) and callback.message:
+            await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
         await state.set_state(Onboarding.workout_time)
         if callback.message:
             await callback.message.answer("Во сколько обычно удобно? Напиши в формате 19:00.")
@@ -179,7 +194,7 @@ def build_start_router(context: AppContext) -> Router:
         if callback.message:
             await callback.message.answer(
                 "Готово. Главная цель — 10 тренировок за 30 дней. Пропуски не обнуляют общий прогресс.",
-                reply_markup=menu_keyboard(),
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
         await callback.answer()
 
