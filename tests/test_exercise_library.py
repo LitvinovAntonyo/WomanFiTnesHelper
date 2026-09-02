@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
+
+import pytest
 
 from app.exercise_library import (
     CARDIO_CODES,
@@ -10,7 +13,14 @@ from app.exercise_library import (
     repetitions_text,
     rest_seconds_for,
 )
-from app.handlers.workout import cardio_keyboard, plan_text, step_keyboard, step_text
+from app.handlers.workout import (
+    cardio_keyboard,
+    parse_set_input,
+    plan_text,
+    step_caption,
+    step_keyboard,
+    step_text,
+)
 from app.keyboards import RESET_TODAY_TEXT, menu_keyboard
 from app.services.workouts import DEFAULT_TEMPLATES
 
@@ -101,7 +111,7 @@ def test_machine_shoulder_press_has_complete_guidance():
     assert guidance.mistakes
 
 
-def test_plan_shows_whole_workout_and_never_requests_weight_input():
+def test_plan_shows_whole_workout_and_requests_per_set_input():
     items = [
         SimpleNamespace(
             position=1,
@@ -138,7 +148,7 @@ def test_plan_shows_whole_workout_and_never_requests_weight_input():
     assert "1. Кардио на выбор — 10 минут" in text
     assert "2. Жим ногами — 2 подхода × 12 повторений" in text
     assert "Заминка в программу не входит" in text
-    assert "Рабочий вес вводить не нужно" in text
+    assert "запиши фактические вес и повторения" in text
 
 
 def test_temporary_reset_button_is_available_from_main_menu():
@@ -156,15 +166,85 @@ def test_machine_rep_ranges_are_shown_in_plan_language():
     )
 
 
-def test_exercise_card_contains_detailed_technique_and_one_done_button():
+def make_strength_step(previous_weight: Decimal | None = None):
+    return SimpleNamespace(
+        exercise=SimpleNamespace(code="seated_row", name="Горизонтальная тяга"),
+        item=SimpleNamespace(duration_minutes=None, position=2),
+        result=SimpleNamespace(
+            id=77,
+            completed_sets=0,
+            sets_planned=2,
+            reps=12,
+        ),
+        previous_weight=previous_weight,
+    )
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("25 12", (Decimal("25"), 12)),
+        ("25,5 12", (Decimal("25.5"), 12)),
+        ("- 15", (None, 15)),
+    ],
+)
+def test_parse_set_input(raw, expected):
+    assert parse_set_input(raw) == expected
+
+
+@pytest.mark.parametrize("raw", ["", "25", "abc 12", "25 0", "1000 12"])
+def test_parse_set_input_rejects_invalid_values(raw):
+    with pytest.raises(ValueError):
+        parse_set_input(raw)
+
+
+def test_strength_card_has_log_repeat_skip_replace_and_pain_actions():
+    step = make_strength_step(previous_weight=Decimal("25"))
+
+    keyboard = step_keyboard(step, repeat_available=True)
+    callbacks = [
+        button.callback_data
+        for row in keyboard.inline_keyboard
+        for button in row
+    ]
+
+    assert f"exercise:log:{step.result.id}" in callbacks
+    assert f"exercise:repeat:{step.result.id}" in callbacks
+    assert f"exercise:pain:{step.result.id}" in callbacks
+    assert f"exercise:skip:{step.result.id}" in callbacks
+    assert f"exercise:replace:{step.result.id}" in callbacks
+    assert any("25 кг × 12" in button.text for row in keyboard.inline_keyboard for button in row)
+
+
+def test_repeat_button_supports_a_machine_without_weight_scale():
+    step = make_strength_step()
+
+    keyboard = step_keyboard(
+        step,
+        repeat_available=True,
+        last_set=(None, 12),
+    )
+
+    assert any(
+        button.text == "Повторить: без веса × 12"
+        for row in keyboard.inline_keyboard
+        for button in row
+    )
+
+
+def test_strength_card_contains_detailed_technique_and_fixed_rest():
     step = SimpleNamespace(
         exercise=SimpleNamespace(code="seated_row", name="Горизонтальная тяга"),
-        item=SimpleNamespace(duration_minutes=None),
-        result=SimpleNamespace(id=77, completed_sets=0, sets_planned=2),
+        item=SimpleNamespace(duration_minutes=None, position=2),
+        result=SimpleNamespace(id=77, completed_sets=0, sets_planned=2, reps=12),
+        previous_weight=Decimal("25"),
+        session=SimpleNamespace(
+            template=SimpleNamespace(items=[object(), object()])
+        ),
     )
 
     text = step_text(step)
-    keyboard = step_keyboard(step)
+    caption = step_caption(step)
 
     assert "Исходное положение" in text
     assert "Движение" in text
@@ -172,11 +252,8 @@ def test_exercise_card_contains_detailed_technique_and_one_done_button():
     assert "Главный ориентир" in text
     assert "Не делай так" in text
     assert "лопаток назад и вниз" in text
-    assert keyboard.inline_keyboard[0][0].callback_data == "exercise:set:77"
-    assert "Подход 1/2" in keyboard.inline_keyboard[0][0].text
-    assert keyboard.inline_keyboard[1][0].callback_data == "exercise:replace:77"
-    assert keyboard.inline_keyboard[1][1].callback_data == "exercise:skip:77"
-    assert "вес" not in keyboard.inline_keyboard[0][0].text.lower()
+    assert "Отдых после подхода: 90 секунд" in caption
+    assert "Прошлый рабочий вес: 25 кг" in caption
 
 
 def test_cardio_choice_has_all_three_options():
@@ -186,4 +263,5 @@ def test_cardio_choice_has_all_three_options():
         "cardio:select:42:cardio_treadmill",
         "cardio:select:42:cardio_elliptical",
         "cardio:select:42:cardio_bike",
+        "session:light:42",
     ]

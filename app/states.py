@@ -22,4 +22,4 @@ class RescheduleInput(StatesGroup):
 
 
 class WorkoutInput(StatesGroup):
-    weight = State()
+    set_result = State()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -10,10 +11,13 @@ from aiogram.client.session.base import BaseSession
 from aiogram.methods import TelegramMethod
 from aiogram.types import CallbackQuery, Chat, Message, Update
 from aiogram.types import User as TelegramUser
+from sqlalchemy import select
 
 from app.context import AppContext
 from app.handlers import build_routers
+from app.handlers import workout as workout_module
 from app.llm import build_llm_service
+from app.models import ExerciseSetResult, WorkoutSessionFeedback
 from app.services.scheduler import ReminderService
 
 
@@ -127,7 +131,7 @@ async def test_start_and_complete_onboarding_through_dispatcher(app_services):
 
 @pytest.mark.asyncio
 async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
-    app_services, onboarded_user
+    app_services, onboarded_user, monkeypatch
 ):
     settings, database, users, workouts, progress, _ = app_services
     session = RecordingSession()
@@ -146,6 +150,14 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     )
     dispatcher = Dispatcher()
     dispatcher.include_routers(*build_routers(context))
+    started: list[tuple[int, int]] = []
+
+    async def fake_start_rest(
+        rest_tasks, context, message, telegram_id, result_id, seconds
+    ):
+        started.append((result_id, seconds))
+
+    monkeypatch.setattr(workout_module, "start_rest_task", fake_start_rest)
 
     await dispatcher.feed_update(bot, user_message(20, "🏋️ Начать тренировку"))
     workout = await workouts.active_or_new(10001)
@@ -165,14 +177,112 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     assert strength.item.position == 2
 
     await dispatcher.feed_update(
-        bot, callback_update(23, f"exercise:set:{strength.result.id}")
+        bot, callback_update(23, f"exercise:log:{strength.result.id}")
     )
+    await dispatcher.feed_update(bot, user_message(24, "20"))
+    async with database.session() as database_session:
+        assert (
+            await database_session.scalar(
+                select(ExerciseSetResult).where(
+                    ExerciseSetResult.exercise_result_id == strength.result.id
+                )
+            )
+            is None
+        )
+    await dispatcher.feed_update(bot, user_message(25, "20 12"))
     state = await workouts.result_state(strength.result.id, 10001)
     assert state[1:3] == (1, 2)
+    async with database.session() as database_session:
+        logged = await database_session.scalar(
+            select(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == strength.result.id
+            )
+        )
+    assert logged is not None
+    assert (logged.weight_kg, logged.reps) == (Decimal("20.00"), 12)
+    assert started == [(strength.result.id, 75)]
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("С чего начнём кардио-разогрев" in text for text in sent_texts)
     assert any("Заминка в программу не входит" in text for text in sent_texts)
-    assert any("Отдохни перед следующим" in text for text in sent_texts)
+    assert any("Напиши вес и повторения" in text for text in sent_texts)
+
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_pain_advances_and_completed_session_collects_feedback(
+    app_services, onboarded_user, monkeypatch
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    async def fake_start_rest(
+        rest_tasks, context, message, telegram_id, result_id, seconds
+    ):
+        return None
+
+    monkeypatch.setattr(workout_module, "start_rest_task", fake_start_rest)
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.choose_cardio(workout.id, 10001, "cardio_bike")
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await dispatcher.feed_update(
+        bot, callback_update(30, f"exercise:set:{cardio.result.id}")
+    )
+    painful = await workouts.get_step(workout.id, 10001)
+    assert painful is not None
+    await dispatcher.feed_update(
+        bot, callback_update(31, f"exercise:pain:{painful.result.id}")
+    )
+    following = await workouts.get_step(workout.id, 10001)
+    assert following is not None
+    assert following.result.id != painful.result.id
+
+    update_id = 32
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        for _ in range(step.result.sets_planned):
+            await dispatcher.feed_update(
+                bot,
+                callback_update(update_id, f"exercise:log:{step.result.id}"),
+            )
+            update_id += 1
+            await dispatcher.feed_update(bot, user_message(update_id, "- 12"))
+            update_id += 1
+
+    sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("не продолжай через острую" in text.lower() for text in sent_texts)
+    assert any("Насколько комфортной была нагрузка?" in text for text in sent_texts)
+
+    await dispatcher.feed_update(
+        bot,
+        callback_update(update_id, f"session:feedback:{workout.id}:ok"),
+    )
+    async with database.session() as database_session:
+        feedback = await database_session.scalar(
+            select(WorkoutSessionFeedback).where(
+                WorkoutSessionFeedback.session_id == workout.id
+            )
+        )
+    assert feedback is not None
+    assert feedback.effort == "ok"
 
     await llm.close()
     await bot.session.close()
