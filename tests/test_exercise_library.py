@@ -98,7 +98,27 @@ def test_rest_is_fixed_per_exercise():
     assert rest_seconds_for("seated_row") == 90
     assert rest_seconds_for("chest_press") == 90
     assert rest_seconds_for("machine_shoulder_press") == 90
+    assert rest_seconds_for("pec_deck") == 90
     assert rest_seconds_for("cardio_treadmill") is None
+
+
+def test_every_reachable_strength_exercise_has_an_approved_fixed_rest():
+    active_codes = {
+        raw[0]
+        for template in DEFAULT_TEMPLATES
+        for raw in template["items"]
+    }
+    reachable_codes = active_codes | {
+        replacement
+        for code, replacement in EXERCISE_ALTERNATIVES.items()
+        if code in active_codes
+    }
+
+    for code in reachable_codes:
+        if code in CARDIO_CODES:
+            assert rest_seconds_for(code) is None
+        else:
+            assert rest_seconds_for(code) in {60, 75, 90, 120}, code
 
 
 def test_machine_shoulder_press_has_complete_guidance():
@@ -146,7 +166,8 @@ def test_plan_shows_whole_workout_and_requests_per_set_input():
 
     assert "Полный план:" in text
     assert "1. Кардио на выбор — 10 минут" in text
-    assert "2. Жим ногами — 2 подхода × 12 повторений" in text
+    assert "2. Жим ногами — 2 подхода × 10–12 повторений" in text
+    assert "Ожидаемое время: 50–60 минут" in text
     assert "Заминка в программу не входит" in text
     assert "запиши фактические вес и повторения" in text
 
@@ -169,6 +190,12 @@ def test_machine_rep_ranges_are_shown_in_plan_language():
     assert repetitions_text("seated_leg_curl", 15) == "12–15 повторений"
     assert repetitions_text("hip_abduction", 20) == "15–20 повторений"
     assert repetitions_text("machine_shoulder_press", 12) == "10–12 повторений"
+    assert repetitions_text("leg_press", 12) == "10–12 повторений"
+    assert repetitions_text("hack_squat", 12) == "10–12 повторений"
+    assert repetitions_text("lat_pulldown", 12) == "10–12 повторений"
+    assert repetitions_text("seated_row", 12) == "10–12 повторений"
+    assert repetitions_text("chest_press", 12) == "10–12 повторений"
+    assert repetitions_text("pec_deck", 12) == "10–12 повторений"
     assert (
         repetitions_text("glute_kickback", 15)
         == "12–15 повторений на каждую ногу"
@@ -178,7 +205,7 @@ def test_machine_rep_ranges_are_shown_in_plan_language():
 def make_strength_step(previous_weight: Decimal | None = None):
     return SimpleNamespace(
         exercise=SimpleNamespace(code="seated_row", name="Горизонтальная тяга"),
-        item=SimpleNamespace(duration_minutes=None, position=2),
+        item=SimpleNamespace(duration_minutes=None, position=2, reps=12),
         result=SimpleNamespace(
             id=77,
             completed_sets=0,
@@ -244,9 +271,11 @@ def test_repeat_button_supports_a_machine_without_weight_scale():
 def test_strength_card_contains_detailed_technique_and_fixed_rest():
     step = SimpleNamespace(
         exercise=SimpleNamespace(code="seated_row", name="Горизонтальная тяга"),
-        item=SimpleNamespace(duration_minutes=None, position=2),
+        item=SimpleNamespace(duration_minutes=None, position=2, reps=12),
         result=SimpleNamespace(id=77, completed_sets=0, sets_planned=2, reps=12),
         previous_weight=Decimal("25"),
+        reserve_reps="3–4",
+        minimum_weight_increase_suggested=False,
         session=SimpleNamespace(
             template=SimpleNamespace(items=[object(), object()])
         ),
@@ -263,6 +292,24 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
     assert "лопаток назад и вниз" in text
     assert "Отдых после подхода: 90 секунд" in caption
     assert "Прошлый рабочий вес: 25 кг" in caption
+    assert "Запас: 3–4 технически чистых повтора" in caption
+
+    step.minimum_weight_increase_suggested = True
+    progression_caption = step_caption(step)
+    assert "минимальный доступный шаг выше прошлого рабочего веса" in progression_caption
+
+
+def test_active_strength_guidance_promises_per_set_logging_not_no_logging():
+    active_codes = {
+        raw[0]
+        for template in DEFAULT_TEMPLATES
+        for raw in template["items"]
+        if raw[2]
+    }
+    for code in active_codes:
+        label = EXERCISE_GUIDANCE[code].weight_label.lower()
+        assert "без записи" not in label, code
+        assert "зап" in label, code
 
 
 def test_cardio_choice_has_all_three_options():

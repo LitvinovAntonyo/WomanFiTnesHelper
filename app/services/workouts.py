@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.database import Database
-from app.exercise_library import CARDIO_CODES, alternative_code_for, rest_seconds_for
+from app.exercise_library import (
+    CARDIO_CODES,
+    REP_RANGE_WIDTH,
+    alternative_code_for,
+    rest_seconds_for,
+)
 from app.models import (
     Achievement,
     Exercise,
@@ -37,6 +42,9 @@ class WorkoutStep:
     item: WorkoutExercise
     exercise: Exercise
     previous_weight: Decimal | None
+    reserve_reps: str
+    minimum_weight_increase_suggested: bool
+    awaiting_effort: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +59,7 @@ class WorkoutSummary:
     duration_minutes: int
     completed_exercises: int
     skipped_exercises: int
+    pain_stopped_exercises: int = 0
     weight_changes: tuple[WeightChange, ...] = ()
 
 
@@ -120,6 +129,90 @@ EXTRA_EXERCISES: tuple[tuple[str, str, bool, str], ...] = (
 class WorkoutService:
     def __init__(self, database: Database):
         self.database = database
+
+    @staticmethod
+    async def _completed_v4_count(session: AsyncSession, user_id: int) -> int:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(WorkoutSession)
+                .join(WorkoutTemplate)
+                .where(
+                    WorkoutSession.user_id == user_id,
+                    WorkoutSession.status == "completed",
+                    WorkoutTemplate.active.is_(True),
+                )
+            )
+            or 0
+        )
+
+    @staticmethod
+    async def _current_unfinished_result_id(
+        session: AsyncSession, session_id: int
+    ) -> int | None:
+        return await session.scalar(
+            select(ExerciseResult.id)
+            .join(WorkoutExercise)
+            .where(
+                ExerciseResult.session_id == session_id,
+                ExerciseResult.completed.is_(False),
+            )
+            .order_by(WorkoutExercise.position)
+            .limit(1)
+        )
+
+    @classmethod
+    async def _require_current_active_result(
+        cls,
+        session: AsyncSession,
+        result_id: int,
+        telegram_id: int,
+    ) -> ExerciseResult:
+        result = await session.scalar(
+            select(ExerciseResult)
+            .options(
+                joinedload(ExerciseResult.session),
+                joinedload(ExerciseResult.workout_exercise).joinedload(
+                    WorkoutExercise.exercise
+                ),
+                joinedload(ExerciseResult.outcome).joinedload(
+                    ExerciseOutcome.effective_exercise
+                ),
+            )
+            .join(WorkoutSession)
+            .join(User)
+            .where(
+                ExerciseResult.id == result_id,
+                User.telegram_id == telegram_id,
+            )
+        )
+        if result is None:
+            raise ValueError("Упражнение не найдено")
+        if result.session.status != "active" or result.completed:
+            raise ValueError("Действие доступно только для текущего упражнения")
+        current_id = await cls._current_unfinished_result_id(
+            session, result.session_id
+        )
+        if current_id != result.id:
+            raise ValueError("Действие доступно только для текущего упражнения")
+        return result
+
+    @staticmethod
+    async def _mark_outcome_completed(
+        session: AsyncSession, result_id: int
+    ) -> None:
+        statement = sqlite_insert(ExerciseOutcome).values(
+            exercise_result_id=result_id,
+            status="completed",
+            effort=None,
+        )
+        await session.execute(
+            statement.on_conflict_do_update(
+                index_elements=[ExerciseOutcome.exercise_result_id],
+                set_={"status": "completed", "effort": None, "updated_at": utc_now()},
+                where=ExerciseOutcome.status == "pending",
+            )
+        )
 
     @staticmethod
     async def _last_logged_set_for_exercise(
@@ -271,16 +364,7 @@ class WorkoutService:
                 if existing:
                     return existing
             template_id = await self._pick_template_id(session, user_id)
-            completed_count = int(
-                await session.scalar(
-                    select(func.count()).select_from(WorkoutSession).join(WorkoutTemplate).where(
-                        WorkoutSession.user_id == user_id,
-                        WorkoutSession.status == "completed",
-                        WorkoutTemplate.active.is_(True),
-                    )
-                )
-                or 0
-            )
+            completed_count = await self._completed_v4_count(session, user_id)
             workout = WorkoutSession(
                 user_id=user_id,
                 template_id=template_id,
@@ -294,13 +378,14 @@ class WorkoutService:
                 (
                     await session.scalars(
                         select(WorkoutExercise)
+                        .options(joinedload(WorkoutExercise.exercise))
                         .where(WorkoutExercise.template_id == template_id)
                         .order_by(WorkoutExercise.position)
                     )
                 ).all()
             )
             for item in items:
-                reps = await self._adapted_reps(session, user_id, item)
+                reps, _ = await self._progression_state(session, user_id, item)
                 sets_planned = (
                     min(item.sets, 2)
                     if completed_count < 6 and item.reps is not None
@@ -317,16 +402,18 @@ class WorkoutService:
             await session.flush()
             return workout
 
-    async def _adapted_reps(
+    async def _progression_state(
         self, session: object, user_id: int, item: WorkoutExercise
-    ) -> int | None:
+    ) -> tuple[int | None, bool]:
         """Apply a deliberately small, explainable adjustment to the next session."""
         if item.reps is None:
-            return None
-        efforts = list(
+            return None, False
+        width = REP_RANGE_WIDTH.get(item.exercise.code, 0)
+        lower = max(1, item.reps - width)
+        history = list(
             (
-                await session.scalars(  # type: ignore[attr-defined]
-                    select(ExerciseOutcome.effort)
+                await session.execute(  # type: ignore[attr-defined]
+                    select(ExerciseOutcome.effort, ExerciseResult.reps)
                     .join(ExerciseResult)
                     .join(WorkoutSession)
                     .join(WorkoutExercise, ExerciseResult.workout_exercise_id == WorkoutExercise.id)
@@ -335,18 +422,22 @@ class WorkoutService:
                         WorkoutSession.status == "completed",
                         WorkoutExercise.exercise_id == item.exercise_id,
                         ExerciseOutcome.status == "completed",
-                        ExerciseOutcome.effort.is_not(None),
                     )
                     .order_by(ExerciseOutcome.updated_at.desc())
-                    .limit(2)
+                    .limit(8)
                 )
             ).all()
         )
-        if len(efforts) == 2 and efforts == ["easy", "easy"]:
-            return item.reps + 1
-        if efforts and efforts[0] == "hard":
-            return max(6, item.reps - 1)
-        return item.reps
+        evaluated = [(effort, reps) for effort, reps in history if effort is not None]
+        latest_reps = int(evaluated[0][1] or lower) if evaluated else lower
+        latest_reps = min(item.reps, max(lower, latest_reps))
+        if len(evaluated) >= 2 and [row[0] for row in evaluated[:2]] == ["easy", "easy"]:
+            if latest_reps < item.reps:
+                return latest_reps + 1, False
+            return item.reps, True
+        if evaluated and evaluated[0][0] == "hard":
+            return max(lower, latest_reps - 1), False
+        return latest_reps, False
 
     async def confirm_from_reminder(self, reminder_id: int, telegram_id: int) -> WorkoutSession:
         async with self.database.session() as session:
@@ -511,6 +602,8 @@ class WorkoutService:
             )
             if workout is None:
                 raise ValueError("Тренировка не найдена")
+            completed_count = await self._completed_v4_count(session, workout.user_id)
+            workout.reserve_reps = "3–4" if completed_count < 6 else "2–3"  # type: ignore[attr-defined]
             return workout
 
     async def get_step(self, session_id: int, telegram_id: int) -> WorkoutStep | None:
@@ -557,32 +650,45 @@ class WorkoutService:
                 excluded_session_id=workout.id,
                 require_weight=True,
             )
+            completed_count = await self._completed_v4_count(session, workout.user_id)
+            _, increase_weight = await self._progression_state(
+                session, workout.user_id, item
+            )
             return WorkoutStep(
                 session=workout,
                 result=result,
                 item=item,
                 exercise=exercise,
                 previous_weight=previous_set.weight_kg if previous_set else None,
+                reserve_reps="3–4" if completed_count < 6 else "2–3",
+                minimum_weight_increase_suggested=increase_weight,
+                awaiting_effort=(
+                    exercise.requires_weight
+                    and result.completed_sets >= result.sets_planned
+                    and result.outcome is not None
+                    and result.outcome.status == "completed"
+                    and result.outcome.effort is None
+                ),
             )
 
     async def replace_exercise(self, result_id: int, telegram_id: int) -> int:
         async with self.database.session() as session:
-            result = await session.scalar(
-                select(ExerciseResult)
-                .options(
-                    joinedload(ExerciseResult.workout_exercise).joinedload(WorkoutExercise.exercise),
-                    joinedload(ExerciseResult.outcome).joinedload(
-                        ExerciseOutcome.effective_exercise
-                    ),
-                )
-                .join(WorkoutSession)
-                .join(User)
-                .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
+            result = await self._require_current_active_result(
+                session, result_id, telegram_id
             )
-            if result is None:
-                raise ValueError("Упражнение не найдено")
             if result.completed_sets:
                 raise ValueError("Замену можно выбрать до первого подхода")
+            claimed = await session.execute(
+                update(ExerciseResult)
+                .where(
+                    ExerciseResult.id == result.id,
+                    ExerciseResult.completed.is_(False),
+                    ExerciseResult.completed_sets == 0,
+                )
+                .values(updated_at=utc_now())
+            )
+            if claimed.rowcount != 1:
+                raise ValueError("Действие доступно только для текущего упражнения")
             item = result.workout_exercise
             current = (
                 result.outcome.effective_exercise
@@ -610,22 +716,27 @@ class WorkoutService:
 
     async def skip_exercise(self, result_id: int, telegram_id: int) -> int:
         async with self.database.session() as session:
-            result = await session.scalar(
-                select(ExerciseResult)
-                .options(joinedload(ExerciseResult.outcome))
-                .join(WorkoutSession)
-                .join(User)
-                .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
+            result = await self._require_current_active_result(
+                session, result_id, telegram_id
             )
-            if result is None:
-                raise ValueError("Упражнение не найдено")
+            if result.completed_sets >= result.sets_planned:
+                raise ValueError("Действие доступно только для текущего упражнения")
+            completed = await session.execute(
+                update(ExerciseResult)
+                .where(
+                    ExerciseResult.id == result.id,
+                    ExerciseResult.completed.is_(False),
+                )
+                .values(completed=True)
+            )
+            if completed.rowcount != 1:
+                raise ValueError("Действие доступно только для текущего упражнения")
             outcome = result.outcome
             if outcome is None:
                 outcome = ExerciseOutcome(exercise_result_id=result.id)
                 session.add(outcome)
             outcome.status = "skipped"
             outcome.effort = None
-            result.completed = True
             return result.session_id
 
     async def enable_light_mode(self, session_id: int, telegram_id: int) -> int:
@@ -745,23 +856,84 @@ class WorkoutService:
     ) -> int:
         if effort not in {None, "easy", "ok", "hard", "pain"}:
             raise ValueError("Неизвестная оценка нагрузки")
+        if effort is None:
+            raise ValueError("Выбери оценку нагрузки")
         async with self.database.session() as session:
             result = await session.scalar(
                 select(ExerciseResult)
-                .options(joinedload(ExerciseResult.outcome))
+                .options(
+                    joinedload(ExerciseResult.outcome),
+                    joinedload(ExerciseResult.session),
+                    joinedload(ExerciseResult.workout_exercise).joinedload(
+                        WorkoutExercise.exercise
+                    ),
+                )
                 .join(WorkoutSession)
                 .join(User)
                 .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
             )
             if result is None:
                 raise ValueError("Упражнение не найдено")
-            outcome = result.outcome
-            if outcome is None:
-                outcome = ExerciseOutcome(exercise_result_id=result.id)
-                session.add(outcome)
-            outcome.status = "completed"
-            outcome.effort = effort
+            if (
+                result.session.status != "active"
+                or result.completed
+                or result.completed_sets < result.sets_planned
+                or not result.workout_exercise.exercise.requires_weight
+            ):
+                raise ValueError("Оценить можно только что завершённое упражнение")
+            frontier_result_id = await self._current_unfinished_result_id(
+                session, result.session_id
+            )
+            if frontier_result_id != result.id:
+                raise ValueError("Оценить можно только что завершённое упражнение")
+            saved = await session.execute(
+                update(ExerciseOutcome)
+                .where(
+                    ExerciseOutcome.exercise_result_id == result.id,
+                    ExerciseOutcome.status == "completed",
+                    ExerciseOutcome.effort.is_(None),
+                )
+                .values(
+                    status="pain" if effort == "pain" else "completed",
+                    effort=effort,
+                    updated_at=utc_now(),
+                )
+            )
+            if saved.rowcount != 1:
+                raise ValueError("Оценка уже сохранена или шаг больше не актуален")
+            advanced = await session.execute(
+                update(ExerciseResult)
+                .where(
+                    ExerciseResult.id == result.id,
+                    ExerciseResult.completed.is_(False),
+                    ExerciseResult.completed_sets >= ExerciseResult.sets_planned,
+                )
+                .values(completed=True)
+            )
+            if advanced.rowcount != 1:
+                raise ValueError("Оценка уже сохранена или шаг больше не актуален")
             return result.session_id
+
+    async def fixed_rest_for_current(
+        self, result_id: int, telegram_id: int
+    ) -> tuple[int, int]:
+        async with self.database.session() as session:
+            result = await self._require_current_active_result(
+                session, result_id, telegram_id
+            )
+            exercise = (
+                result.outcome.effective_exercise
+                if result.outcome and result.outcome.effective_exercise
+                else result.workout_exercise.exercise
+            )
+            seconds = rest_seconds_for(exercise.code)
+            if (
+                seconds is None
+                or result.completed_sets <= 0
+                or result.completed_sets >= result.sets_planned
+            ):
+                raise ValueError("Этот таймер больше не относится к текущему подходу")
+            return result.session_id, seconds
 
     async def result_state(
         self, result_id: int, telegram_id: int
@@ -887,19 +1059,22 @@ class WorkoutService:
                 result.completed_sets = next_number
                 result.reps = reps
                 result.weight_kg = normalized_weight
-                result.completed = next_number >= result.sets_planned
                 exercise = (
                     result.outcome.effective_exercise
                     if result.outcome and result.outcome.effective_exercise
                     else result.workout_exercise.exercise
                 )
+                exercise_complete = next_number >= result.sets_planned
+                result.completed = exercise_complete and not exercise.requires_weight
+                if exercise_complete:
+                    await self._mark_outcome_completed(session, result.id)
                 return SetLogState(
                     session_id=result.session_id,
                     result_id=result.id,
                     set_number=next_number,
                     completed_sets=result.completed_sets,
                     sets_planned=result.sets_planned,
-                    exercise_complete=result.completed,
+                    exercise_complete=exercise_complete,
                     rest_seconds=rest_seconds_for(exercise.code) or 0,
                 )
         except IntegrityError as exc:
@@ -963,34 +1138,40 @@ class WorkoutService:
 
     async def complete_next_set(self, result_id: int, telegram_id: int) -> tuple[int, bool]:
         async with self.database.session() as session:
-            result = await session.scalar(
-                select(ExerciseResult)
-                .options(joinedload(ExerciseResult.workout_exercise))
-                .join(WorkoutSession)
-                .join(User)
-                .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
+            result = await self._require_current_active_result(
+                session, result_id, telegram_id
             )
-            if result is None:
-                raise ValueError("Упражнение не найдено")
             if result.completed_sets < result.sets_planned:
                 result.completed_sets += 1
-            if result.completed_sets >= result.sets_planned:
-                result.completed = True
-            return result.session_id, result.completed
+            exercise_complete = result.completed_sets >= result.sets_planned
+            if exercise_complete:
+                result.completed = not result.workout_exercise.exercise.requires_weight
+                await self._mark_outcome_completed(session, result.id)
+            return result.session_id, exercise_complete
 
     async def complete_exercise(self, result_id: int, telegram_id: int) -> int:
         """Mark the whole prescribed exercise complete without collecting set/weight data."""
         async with self.database.session() as session:
-            result = await session.scalar(
-                select(ExerciseResult)
-                .join(WorkoutSession)
-                .join(User)
-                .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
+            result = await self._require_current_active_result(
+                session, result_id, telegram_id
             )
-            if result is None:
-                raise ValueError("Упражнение не найдено")
-            result.completed_sets = result.sets_planned
-            result.completed = True
+            if result.completed_sets >= result.sets_planned:
+                raise ValueError("Действие доступно только для текущего упражнения")
+            requires_effort = result.workout_exercise.exercise.requires_weight
+            completed = await session.execute(
+                update(ExerciseResult)
+                .where(
+                    ExerciseResult.id == result.id,
+                    ExerciseResult.completed.is_(False),
+                )
+                .values(
+                    completed_sets=result.sets_planned,
+                    completed=not requires_effort,
+                )
+            )
+            if completed.rowcount != 1:
+                raise ValueError("Действие доступно только для текущего упражнения")
+            await self._mark_outcome_completed(session, result.id)
             return result.session_id
 
     async def finish_if_complete(self, session_id: int) -> bool:
@@ -1051,6 +1232,11 @@ class WorkoutService:
             skipped = sum(
                 1 for result in workout.results if result.outcome and result.outcome.status == "skipped"
             )
+            pain_stopped = sum(
+                1
+                for result in workout.results
+                if result.outcome and result.outcome.status == "pain"
+            )
             weight_changes: list[WeightChange] = []
             results = sorted(
                 workout.results,
@@ -1098,7 +1284,8 @@ class WorkoutService:
                     )
             return WorkoutSummary(
                 duration_minutes=elapsed,
-                completed_exercises=len(workout.results) - skipped,
+                completed_exercises=len(workout.results) - skipped - pain_stopped,
                 skipped_exercises=skipped,
+                pain_stopped_exercises=pain_stopped,
                 weight_changes=tuple(weight_changes),
             )

@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
@@ -74,6 +75,8 @@ def step_keyboard(
     repeat_available: bool = False,
     last_set: tuple[Decimal | None, int] | None = None,
 ) -> InlineKeyboardMarkup:
+    if getattr(step, "awaiting_effort", False):
+        return effort_keyboard(step.result.id)
     if step.item.duration_minutes:
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -259,7 +262,7 @@ def dose_text(step: WorkoutStep) -> str:
         f"{step.item.duration_minutes} минут"
         if step.item.duration_minutes
         else f"{step.result.sets_planned} × "
-        f"{repetitions_text(step.exercise.code, step.result.reps)}"
+        f"{repetitions_text(step.exercise.code, step.item.reps)}"
     )
 
 
@@ -269,6 +272,7 @@ def plan_text(workout: WorkoutSession) -> str:
     lines = [
         f"🏋️ {workout.template.name}",
         workout.template.focus,
+        "Ожидаемое время: 50–60 минут.",
         "",
         "Полный план:",
     ]
@@ -278,7 +282,7 @@ def plan_text(workout: WorkoutSession) -> str:
             f"{item.duration_minutes} минут"
             if item.duration_minutes
             else f"{result.sets_planned if result else item.sets} подхода × "
-            f"{repetitions_text(item.exercise.code, result.reps if result else item.reps)}"
+            f"{repetitions_text(item.exercise.code, item.reps)}"
         )
         name = "Кардио на выбор" if item.position == 1 else item.exercise.name
         lines.append(f"{item.position}. {name} — {dose}")
@@ -287,7 +291,8 @@ def plan_text(workout: WorkoutSession) -> str:
             "",
             "Сначала кардио, затем силовой блок. Заминка в программу не входит.",
             "После каждого силового подхода запиши фактические вес и повторения. "
-            "Выбирай нагрузку с запасом примерно 2–3 технически чистых повтора.",
+            f"Выбирай нагрузку с запасом {getattr(workout, 'reserve_reps', '3–4')} "
+            "технически чистых повтора.",
             "Дальше покажу каждое упражнение отдельно: картинку, технику и частые ошибки.",
         ]
     )
@@ -305,9 +310,17 @@ def step_caption(step: WorkoutStep) -> str:
     rest_seconds = rest_seconds_for(step.exercise.code)
     if rest_seconds is not None:
         lines.append(f"Отдых после подхода: {rest_seconds} секунд")
+        lines.append(
+            f"Запас: {step.reserve_reps} технически чистых повтора"
+        )
     if step.previous_weight is not None:
         lines.append(
             f"Прошлый рабочий вес: {format_decimal(step.previous_weight)} кг"
+        )
+    if step.minimum_weight_increase_suggested:
+        lines.append(
+            "Прогрессия: на этой тренировке установи вес на минимальный доступный "
+            "шаг выше прошлого рабочего веса этого тренажёра."
         )
     return "\n".join(lines)
 
@@ -346,6 +359,11 @@ def build_workout_router(context: AppContext) -> Router:
                     if summary.skipped_exercises
                     else ""
                 )
+                pain_stopped = (
+                    f" · остановлено из-за дискомфорта: {summary.pain_stopped_exercises}"
+                    if summary.pain_stopped_exercises
+                    else ""
+                )
                 weight_lines = [
                     f"{item.exercise_name}: {format_decimal(item.previous_kg)} → "
                     f"{format_decimal(item.current_kg)} кг"
@@ -358,7 +376,8 @@ def build_workout_router(context: AppContext) -> Router:
                 )
                 await message.answer(
                     "Тренировка завершена ✅\n"
-                    f"Выполнено упражнений: {summary.completed_exercises}{skipped}\n"
+                    f"Выполнено упражнений: {summary.completed_exercises}"
+                    f"{skipped}{pain_stopped}\n"
                     f"Время: около {summary.duration_minutes} минут\n"
                     f"Общий прогресс этого месяца: {progress.month_completed}/{progress.monthly_target}. "
                     "На сегодня всё — отдельной заминки в плане нет."
@@ -373,14 +392,17 @@ def build_workout_router(context: AppContext) -> Router:
         image_path = image_path_for(step.exercise.code)
         if image_path.is_file():
             cached_file_id = await context.workouts.media_file_id(step.exercise.code)
-            sent = await message.answer_photo(
-                cached_file_id or FSInputFile(image_path), caption=step_caption(step)
-            )
-            photos = getattr(sent, "photo", None)
-            if not cached_file_id and photos:
-                await context.workouts.remember_media_file_id(
-                    step.exercise.code, photos[-1].file_id
+            try:
+                sent = await message.answer_photo(
+                    cached_file_id or FSInputFile(image_path), caption=step_caption(step)
                 )
+                photos = getattr(sent, "photo", None)
+                if not cached_file_id and photos:
+                    await context.workouts.remember_media_file_id(
+                        step.exercise.code, photos[-1].file_id
+                    )
+            except (TelegramAPIError, OSError):
+                await message.answer(step_caption(step))
         else:
             await message.answer(step_caption(step))
         last_set = None
@@ -413,11 +435,9 @@ def build_workout_router(context: AppContext) -> Router:
     ) -> None:
         result_id = logged_set.result_id
         if logged_set.exercise_complete:
-            await context.workouts.record_effort(result_id, telegram_id, None)
-            await send_current_step(
-                message,
-                logged_set.session_id,
-                telegram_id,
+            await message.answer(
+                "Как ощущалась нагрузка в этом упражнении?",
+                reply_markup=effort_keyboard(result_id),
             )
             return
         await start_rest_task(
@@ -438,6 +458,7 @@ def build_workout_router(context: AppContext) -> Router:
             await message.answer("Продолжаем с того места, где остановились.")
             await send_current_step(message, workout.id, message.from_user.id)
         else:
+            await message.answer("План на сегодня рассчитан на 50–60 минут.")
             await ask_for_cardio(message, workout.id)
 
     @router.message(F.text == RESET_TODAY_TEXT)
@@ -541,13 +562,13 @@ def build_workout_router(context: AppContext) -> Router:
         if task:
             task.cancel()
         try:
-            _, _, _, completed, strength_exercise = (
+            _, completed_sets, sets_planned, completed, strength_exercise = (
                 await context.workouts.result_state(result_id, callback.from_user.id)
             )
         except ValueError as exc:
             await callback.answer(str(exc), show_alert=True)
             return
-        if completed:
+        if completed or completed_sets >= sets_planned:
             await callback.answer("Этот шаг уже завершён", show_alert=True)
             return
         if strength_exercise:
@@ -563,7 +584,6 @@ def build_workout_router(context: AppContext) -> Router:
         session_id, _ = await context.workouts.complete_next_set(
             result_id, callback.from_user.id
         )
-        await context.workouts.record_effort(result_id, callback.from_user.id, None)
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
@@ -578,13 +598,13 @@ def build_workout_router(context: AppContext) -> Router:
     ) -> None:
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         try:
-            _, _, _, completed, strength_exercise = (
+            _, completed_sets, sets_planned, completed, strength_exercise = (
                 await context.workouts.result_state(result_id, callback.from_user.id)
             )
         except ValueError as exc:
             await callback.answer(str(exc), show_alert=True)
             return
-        if completed or not strength_exercise:
+        if completed or completed_sets >= sets_planned or not strength_exercise:
             await callback.answer("Этот подход уже недоступен", show_alert=True)
             return
         await state.set_state(WorkoutInput.set_result)
@@ -672,14 +692,75 @@ def build_workout_router(context: AppContext) -> Router:
             )
         await callback.answer("Упражнение остановлено")
 
+    @router.callback_query(F.data.startswith("rest:ready:"))
+    async def legacy_rest_ready(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
+        result_id = int((callback.data or "").rsplit(":", 1)[1])
+        try:
+            session_id, _ = await context.workouts.fixed_rest_for_current(
+                result_id, callback.from_user.id
+            )
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        task = rest_tasks.pop((callback.from_user.id, result_id), None)
+        if task:
+            task.cancel()
+        if callback.message:
+            step = await context.workouts.get_step(session_id, callback.from_user.id)
+            if step is not None and step.result.id == result_id:
+                last_set = await context.workouts.last_set_values(
+                    result_id, callback.from_user.id
+                )
+                await callback.message.answer(
+                    "Следующий подход — когда готова.",
+                    reply_markup=step_keyboard(
+                        step,
+                        repeat_available=last_set is not None,
+                        last_set=last_set,
+                    ),
+                )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("rest:timer:"))
+    async def legacy_rest_timer(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
+        _, _, raw_result_id, _raw_old_seconds = (callback.data or "").split(":")
+        result_id = int(raw_result_id)
+        try:
+            _, seconds = await context.workouts.fixed_rest_for_current(
+                result_id, callback.from_user.id
+            )
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        if callback.message:
+            await start_rest_task(
+                rest_tasks,
+                context,
+                callback.message,
+                callback.from_user.id,
+                result_id,
+                seconds,
+            )
+        await callback.answer("Таймер запущен")
+
     @router.callback_query(F.data.startswith("effort:"))
     async def record_effort(callback: CallbackQuery, state: FSMContext) -> None:
         await clear_pending_set_input(state)
         _, raw_result_id, effort = (callback.data or "").split(":")
         result_id = int(raw_result_id)
-        session_id = await context.workouts.record_effort(
-            result_id, callback.from_user.id, effort
-        )
+        try:
+            session_id = await context.workouts.record_effort(
+                result_id, callback.from_user.id, effort
+            )
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
         notes = {
             "easy": "Легко — если так будет два раза подряд, добавлю один повтор.",
             "ok": "Нормально — нагрузку оставляю без изменений.",
@@ -743,9 +824,13 @@ def build_workout_router(context: AppContext) -> Router:
         task = rest_tasks.pop((callback.from_user.id, result_id), None)
         if task:
             task.cancel()
-        session_id = await context.workouts.skip_exercise(
-            result_id, callback.from_user.id
-        )
+        try:
+            session_id = await context.workouts.skip_exercise(
+                result_id, callback.from_user.id
+            )
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
@@ -760,12 +845,28 @@ def build_workout_router(context: AppContext) -> Router:
     ) -> None:
         await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
-        session_id = await context.workouts.complete_exercise(result_id, callback.from_user.id)
-        await context.workouts.record_effort(result_id, callback.from_user.id, None)
+        try:
+            _, _, _, _, strength_exercise = await context.workouts.result_state(
+                result_id, callback.from_user.id
+            )
+            session_id = await context.workouts.complete_exercise(
+                result_id, callback.from_user.id
+            )
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
-            await send_current_step(callback.message, session_id, callback.from_user.id)
+            if strength_exercise:
+                await callback.message.answer(
+                    "Как ощущалась нагрузка в этом упражнении?",
+                    reply_markup=effort_keyboard(result_id),
+                )
+            else:
+                await send_current_step(
+                    callback.message, session_id, callback.from_user.id
+                )
         await callback.answer("Готово")
 
     @router.callback_query(F.data.startswith("reminder:skip:"))

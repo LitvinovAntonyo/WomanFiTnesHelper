@@ -58,3 +58,19 @@ async def test_v3_schema_persists_set_rows_and_session_feedback(
     assert feedback.effort == "ok"
     assert version == 3
     await reopened.close()
+
+
+@pytest.mark.asyncio
+async def test_initialize_never_downgrades_a_newer_schema_version(app_services):
+    settings, database, *_ = app_services
+    async with database.engine.begin() as connection:
+        await connection.execute(text("PRAGMA user_version=7"))
+    await database.close()
+
+    reopened = Database(settings)
+    await reopened.initialize()
+    async with reopened.session() as session:
+        version = await session.scalar(text("PRAGMA user_version"))
+
+    assert version == 7
+    await reopened.close()

@@ -8,8 +8,9 @@ from typing import Any
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.base import StorageKey
-from aiogram.methods import TelegramMethod
+from aiogram.methods import SendPhoto, TelegramMethod
 from aiogram.types import CallbackQuery, Chat, Message, Update
 from aiogram.types import User as TelegramUser
 from sqlalchemy import func, select
@@ -46,6 +47,14 @@ class RecordingSession(BaseSession):
     ) -> AsyncGenerator[bytes, None]:
         if False:
             yield b""
+
+
+class PhotoFailingSession(RecordingSession):
+    async def make_request(self, bot, method, timeout=None):
+        self.methods.append(method)
+        if isinstance(method, SendPhoto):
+            raise TelegramBadRequest(method=method, message="photo unavailable")
+        return True
 
 
 def user_message(update_id: int, text: str) -> Update:
@@ -252,9 +261,116 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     assert started == [(strength.result.id, 75)]
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("С чего начнём кардио-разогрев" in text for text in sent_texts)
+    assert any("50–60 минут" in text for text in sent_texts)
+    assert any("запасом 3–4" in text for text in sent_texts)
     assert any("Заминка в программу не входит" in text for text in sent_texts)
     assert any("Напиши вес и повторения" in text for text in sent_texts)
 
+    await dispatcher.feed_update(
+        bot, callback_update(26, f"exercise:repeat:{strength.result.id}")
+    )
+    effort_prompt = next(
+        method
+        for method in session.methods
+        if "Как ощущалась нагрузка в этом упражнении?"
+        in (getattr(method, "text", "") or "")
+    )
+    effort_callbacks = [
+        button.callback_data
+        for row in effort_prompt.reply_markup.inline_keyboard
+        for button in row
+    ]
+    assert f"effort:{strength.result.id}:easy" in effort_callbacks
+    waiting = await workouts.get_step(workout.id, 10001)
+    assert waiting is not None
+    assert waiting.result.id == strength.result.id
+    assert waiting.awaiting_effort is True
+    await dispatcher.feed_update(
+        bot, callback_update(27, f"effort:{strength.result.id}:easy")
+    )
+    next_step = await workouts.get_step(workout.id, 10001)
+    assert next_step is not None
+    assert next_step.result.id != strength.result.id
+
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_photo_send_failure_falls_back_to_text_and_actions(
+    app_services, onboarded_user
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = PhotoFailingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+    workout = await workouts.active_or_new(10001)
+    await workouts.choose_cardio(workout.id, 10001, "cardio_treadmill")
+    await workouts.begin(workout.id, 10001)
+
+    await dispatcher.feed_update(
+        bot, callback_update(700, f"cardio:select:{workout.id}:cardio_treadmill")
+    )
+
+    texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("1/6 · Кардио" in text for text in texts)
+    technique = next(method for method in session.methods if "Техника —" in (getattr(method, "text", "") or ""))
+    callbacks = [
+        button.callback_data
+        for row in technique.reply_markup.inline_keyboard
+        for button in row
+    ]
+    assert any(value.startswith("exercise:set:") for value in callbacks)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_legacy_rest_callbacks_use_fixed_rest_and_reject_stale_targets(
+    app_services, onboarded_user, monkeypatch
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+    started = []
+
+    async def fake_start_rest(rest_tasks, context, message, telegram_id, result_id, seconds):
+        started.append((result_id, seconds))
+
+    monkeypatch.setattr(workout_module, "start_rest_task", fake_start_rest)
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    strength = await workouts.get_step(workout.id, 10001)
+    assert strength is not None
+    await workouts.record_set(strength.result.id, 10001, 12, None)
+
+    await dispatcher.feed_update(
+        bot, callback_update(710, f"rest:timer:{strength.result.id}:999")
+    )
+    await dispatcher.feed_update(
+        bot, callback_update(711, f"rest:ready:{strength.result.id}")
+    )
+    assert started == [(strength.result.id, 75)]
+    texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("Следующий подход" in text for text in texts)
+
+    await workouts.skip_exercise(strength.result.id, 10001)
+    await dispatcher.feed_update(
+        bot, callback_update(712, f"rest:timer:{strength.result.id}:60")
+    )
+    assert started == [(strength.result.id, 75)]
     await llm.close()
     await bot.session.close()
 
@@ -315,6 +431,10 @@ async def test_pain_advances_and_completed_session_collects_feedback(
             update_id += 1
             await dispatcher.feed_update(bot, user_message(update_id, "- 12"))
             update_id += 1
+        await dispatcher.feed_update(
+            bot, callback_update(update_id, f"effort:{step.result.id}:ok")
+        )
+        update_id += 1
 
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("не продолжай через острую" in text.lower() for text in sent_texts)

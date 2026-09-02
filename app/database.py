@@ -40,7 +40,9 @@ class Database:
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
             # Version 3 is additive: create_all safely extends existing SQLite databases.
-            await connection.execute(text("PRAGMA user_version=3"))
+            current_version = await connection.scalar(text("PRAGMA user_version"))
+            if int(current_version or 0) < 3:
+                await connection.execute(text("PRAGMA user_version=3"))
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

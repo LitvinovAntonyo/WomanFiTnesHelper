@@ -27,6 +27,8 @@ async def complete_workout(workouts, telegram_id: int):
         if step is None:
             break
         await workouts.complete_exercise(step.result.id, telegram_id)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, telegram_id, "ok")
     assert await workouts.finish_if_complete(workout.id)
     return workout.id
 
@@ -39,11 +41,12 @@ async def complete_workout_with_efforts(workouts, telegram_id: int, efforts: dic
         if step is None:
             break
         await workouts.complete_exercise(step.result.id, telegram_id)
-        await workouts.record_effort(
-            step.result.id,
-            telegram_id,
-            efforts.get(step.exercise.code),
-        )
+        if step.exercise.requires_weight:
+            await workouts.record_effort(
+                step.result.id,
+                telegram_id,
+                efforts.get(step.exercise.code, "ok"),
+            )
     assert await workouts.finish_if_complete(workout.id)
     return workout.id
 
@@ -68,8 +71,11 @@ async def complete_workout_with_weighted_sets(
                     reps=12,
                     weight_kg=weight,
                 )
+            await workouts.record_effort(step.result.id, telegram_id, "ok")
         else:
             await workouts.complete_exercise(step.result.id, telegram_id)
+            if step.exercise.requires_weight:
+                await workouts.record_effort(step.result.id, telegram_id, "ok")
     assert await workouts.finish_if_complete(workout.id)
     return workout.id
 
@@ -183,6 +189,8 @@ async def test_chest_press_can_be_replaced_with_pec_deck(
         if step.exercise.code == "chest_press":
             break
         await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
 
     await workouts.replace_exercise(step.result.id, 10001)
     replacement = await workouts.get_step(workout.id, 10001)
@@ -199,7 +207,6 @@ async def test_strength_sets_are_persisted_one_by_one(app_services, onboarded_us
     cardio = await workouts.get_step(workout.id, 10001)
     assert cardio is not None
     await workouts.complete_next_set(cardio.result.id, 10001)
-    await workouts.record_effort(cardio.result.id, 10001, None)
 
     strength = await workouts.get_step(workout.id, 10001)
     assert strength is not None
@@ -520,9 +527,8 @@ async def test_two_easy_repeats_add_only_one_rep_next_time(
 ):
     _, _, _, workouts, _, _ = app_services
     await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
-    await complete_workout_with_efforts(workouts, 10001, {})
-    await complete_workout_with_efforts(workouts, 10001, {})
     await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
+    await complete_workout_with_efforts(workouts, 10001, {})
 
     next_workout = await workouts.active_or_new(10001)
     plan = await workouts.get_plan(next_workout.id, 10001)
@@ -533,8 +539,147 @@ async def test_two_easy_repeats_add_only_one_rep_next_time(
         if items[result.workout_exercise_id] == "chest_press"
     )
 
-    assert chest_press_result.reps == 13
+    assert chest_press_result.reps == 11
     assert chest_press_result.sets_planned == 2
+
+
+@pytest.mark.asyncio
+async def test_two_easy_results_at_ceiling_suggest_minimum_machine_increment(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    for _ in range(2):
+        workout_id = await complete_workout_with_efforts(
+            workouts, 10001, {"chest_press": "easy"}
+        )
+        async with database.session() as session:
+            stored = await session.scalar(
+                select(ExerciseResult)
+                .join(WorkoutExercise)
+                .join(WorkoutExercise.exercise)
+                .where(
+                    ExerciseResult.session_id == workout_id,
+                    WorkoutExercise.exercise.has(code="chest_press"),
+                )
+            )
+            assert stored is not None
+            stored.reps = 12
+
+    await complete_workout(workouts, 10001)
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        if step.exercise.code == "chest_press":
+            assert step.result.reps == 12
+            assert step.minimum_weight_increase_suggested is True
+            break
+        await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
+    else:
+        pytest.fail("chest_press step was not reached")
+
+
+@pytest.mark.asyncio
+async def test_stale_mutation_callbacks_cannot_change_pain_or_completed_results(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    painful = await workouts.get_step(workout.id, 10001)
+    assert painful is not None
+    await workouts.stop_for_discomfort(painful.result.id, 10001)
+
+    stale_calls = (
+        lambda: workouts.replace_exercise(painful.result.id, 10001),
+        lambda: workouts.skip_exercise(painful.result.id, 10001),
+        lambda: workouts.complete_exercise(painful.result.id, 10001),
+        lambda: workouts.record_effort(painful.result.id, 10001, "easy"),
+    )
+    for call in stale_calls:
+        with pytest.raises(ValueError):
+            await call()
+
+    async with database.session() as session:
+        painful_outcome = await session.scalar(
+            select(ExerciseOutcome).where(
+                ExerciseOutcome.exercise_result_id == painful.result.id
+            )
+        )
+    assert painful_outcome is not None
+    assert (painful_outcome.status, painful_outcome.effort) == ("pain", "pain")
+
+    current = await workouts.get_step(workout.id, 10001)
+    assert current is not None
+    await workouts.complete_exercise(current.result.id, 10001)
+    await workouts.record_effort(current.result.id, 10001, "easy")
+    with pytest.raises(ValueError):
+        await workouts.record_effort(current.result.id, 10001, "hard")
+    with pytest.raises(ValueError):
+        await workouts.skip_exercise(current.result.id, 10001)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_effort_callbacks_save_exactly_one_value(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    strength = await workouts.get_step(workout.id, 10001)
+    assert strength is not None
+    await workouts.complete_exercise(strength.result.id, 10001)
+
+    outcomes = await asyncio.gather(
+        workouts.record_effort(strength.result.id, 10001, "easy"),
+        workouts.record_effort(strength.result.id, 10001, "hard"),
+        return_exceptions=True,
+    )
+
+    assert sum(value == workout.id for value in outcomes) == 1
+    assert sum(isinstance(value, ValueError) for value in outcomes) == 1
+    async with database.session() as session:
+        saved = await session.scalar(
+            select(ExerciseOutcome).where(
+                ExerciseOutcome.exercise_result_id == strength.result.id
+            )
+        )
+    assert saved is not None
+    assert saved.status == "completed"
+    assert saved.effort in {"easy", "hard"}
+
+
+@pytest.mark.asyncio
+async def test_summary_excludes_pain_stops_from_completed_count(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    painful = await workouts.get_step(workout.id, 10001)
+    assert painful is not None
+    await workouts.stop_for_discomfort(painful.result.id, 10001)
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
+    assert await workouts.finish_if_complete(workout.id)
+
+    summary = await workouts.summary(workout.id)
+
+    assert summary.completed_exercises == 5
+    assert summary.pain_stopped_exercises == 1
 
 
 @pytest.mark.asyncio
@@ -547,12 +692,14 @@ async def test_first_six_sessions_plan_two_strength_sets_and_seventh_plans_three
         workout = await workouts.active_or_new(10001)
         plan = await workouts.get_plan(workout.id, 10001)
         expected_sets = 2 if session_number <= 6 else 3
+        expected_reserve = "3–4" if session_number <= 6 else "2–3"
 
         assert all(
             result.sets_planned == expected_sets
             for result in plan.results
             if result.reps is not None
         )
+        assert plan.reserve_reps == expected_reserve
 
         if session_number < 7:
             assert await complete_workout(workouts, 10001) == workout.id
