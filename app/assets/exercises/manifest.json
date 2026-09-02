@@ -1,22 +1,484 @@
 {
   "schema_version": 1,
-  "licenses": {},
-  "sources": {},
+  "licenses": {
+    "free-exercise-db": {
+      "provider": "free-exercise-db",
+      "repository_url": "https://github.com/yuhonas/free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md"
+    }
+  },
+  "sources": {
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Walking_Treadmill/0.jpg",
+      "upstream_path": "exercises/Walking_Treadmill/0.jpg",
+      "local_path": "media_sources/exercises/cardio_treadmill/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "e13cd5838b04f617026dd097778d0ce298356992e7f972e1d71c7bf1fe1bb4c6",
+      "role": "setup"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Walking_Treadmill/1.jpg",
+      "upstream_path": "exercises/Walking_Treadmill/1.jpg",
+      "local_path": "media_sources/exercises/cardio_treadmill/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "5b811c65e89b0eec47ae5006ad711b84c11e61fdbaac98334574cebe5855b025",
+      "role": "working"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Elliptical_Trainer/0.jpg",
+      "upstream_path": "exercises/Elliptical_Trainer/0.jpg",
+      "local_path": "media_sources/exercises/cardio_elliptical/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "c155ce19bd5dfe22484a47d99ee7cf1918d9ca4d8bc7d962d3ceaa70fa39fdd5",
+      "role": "setup"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Elliptical_Trainer/1.jpg",
+      "upstream_path": "exercises/Elliptical_Trainer/1.jpg",
+      "local_path": "media_sources/exercises/cardio_elliptical/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "f40b3f77d7f0f0d0af7ff49cbbb006ef3cd362664bdde2c7bb24dd57d822b003",
+      "role": "working"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bicycling_Stationary/0.jpg",
+      "upstream_path": "exercises/Bicycling_Stationary/0.jpg",
+      "local_path": "media_sources/exercises/cardio_bike/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "dc37a609b3e8de862f5e4b83c9d05488c9c5cd825073210dd6e46f2a5b436cfb",
+      "role": "setup"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bicycling_Stationary/1.jpg",
+      "upstream_path": "exercises/Bicycling_Stationary/1.jpg",
+      "local_path": "media_sources/exercises/cardio_bike/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "390a6508a8ffd71998cf184f0b9d6a218630069f343b5678781608ddfe304faa",
+      "role": "working"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Leg_Curl/0.jpg",
+      "upstream_path": "exercises/Seated_Leg_Curl/0.jpg",
+      "local_path": "media_sources/exercises/seated_leg_curl/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "c84ece2e8b52314c8605e9fc3ef1930a59fec475ff1b5a7f98687a4b8fc580a7",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Leg_Curl/1.jpg",
+      "upstream_path": "exercises/Seated_Leg_Curl/1.jpg",
+      "local_path": "media_sources/exercises/seated_leg_curl/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "2cbd4aa6c22162a209a7ced5d1a68274d44e88780c8c3936c7fab57d6e9918fd",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Thigh_Abductor/0.jpg",
+      "upstream_path": "exercises/Thigh_Abductor/0.jpg",
+      "local_path": "media_sources/exercises/hip_abduction/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "572cef392f2a10c377153c5fe0acd5e0b4d0e881024ff6a7fdd4a6320dc7ed51",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Thigh_Abductor/1.jpg",
+      "upstream_path": "exercises/Thigh_Abductor/1.jpg",
+      "local_path": "media_sources/exercises/hip_abduction/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "c438500671ec2dc6fa726086ec4a56903635ee65e37b3449174f18aaed1409c9",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+      "upstream_path": "exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+      "local_path": "media_sources/exercises/lat_pulldown/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "929bc29751c35d0a624840b24501e74dc59438d351e66cc017e7ee8682fb3346",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Wide-Grip_Lat_Pulldown/1.jpg",
+      "upstream_path": "exercises/Wide-Grip_Lat_Pulldown/1.jpg",
+      "local_path": "media_sources/exercises/lat_pulldown/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "781952e629e8a4cff549df94ee6b1da7e32c7cd507382d47e8566718c07807dd",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leverage_Chest_Press/0.jpg",
+      "upstream_path": "exercises/Leverage_Chest_Press/0.jpg",
+      "local_path": "media_sources/exercises/chest_press/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "25764ce3cd65e6007b7b8603d658fe7c15f605353b6850aa40e26f078f2d1912",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leverage_Chest_Press/1.jpg",
+      "upstream_path": "exercises/Leverage_Chest_Press/1.jpg",
+      "local_path": "media_sources/exercises/chest_press/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "d28a7c93978b7010859e7e058a3d382cac9570c68fd1140c7c90a24e67df3502",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Hack_Squat/0.jpg",
+      "upstream_path": "exercises/Hack_Squat/0.jpg",
+      "local_path": "media_sources/exercises/hack_squat/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "f8721b7d75025f29d6a733a6f5571577f541e38891b2da4f152ac88d3f6e957a",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Hack_Squat/1.jpg",
+      "upstream_path": "exercises/Hack_Squat/1.jpg",
+      "local_path": "media_sources/exercises/hack_squat/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "ecd48b616f38fefe802b7adc12a9f0c5520fe579a59152ebc96c7e39ce4bcd35",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leg_Extensions/0.jpg",
+      "upstream_path": "exercises/Leg_Extensions/0.jpg",
+      "local_path": "media_sources/exercises/leg_extension/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "54fd46441d63459e3cdd26f26b826ad049e835fb7f1984b42398fdfbdefb5bfa",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leg_Extensions/1.jpg",
+      "upstream_path": "exercises/Leg_Extensions/1.jpg",
+      "local_path": "media_sources/exercises/leg_extension/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "9e04d0e306d8fee608305766b14a56df1d1312956d374152f58dcbf267d591a9",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Thigh_Adductor/0.jpg",
+      "upstream_path": "exercises/Thigh_Adductor/0.jpg",
+      "local_path": "media_sources/exercises/hip_adduction/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "3b363f261901744a6e833a19fcd835db95495d0beda0eb6695e583ea2dfcf3ab",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Thigh_Adductor/1.jpg",
+      "upstream_path": "exercises/Thigh_Adductor/1.jpg",
+      "local_path": "media_sources/exercises/hip_adduction/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "40be513dd0d6fad0fbd734431e4e83f924b7385b90b53d9ec7eab8809d96df7a",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Cable_Rows/0.jpg",
+      "upstream_path": "exercises/Seated_Cable_Rows/0.jpg",
+      "local_path": "media_sources/exercises/seated_row/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "f5a4adf972f93a6c7b09e003f23005a1163653a7e36b71f1e374acab0243ddf7",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Cable_Rows/1.jpg",
+      "upstream_path": "exercises/Seated_Cable_Rows/1.jpg",
+      "local_path": "media_sources/exercises/seated_row/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "0b8e1a0b0fff86cafff45d851ea631a20d469713e9fd735031d3fffb0299fde6",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leg_Press/1.jpg",
+      "upstream_path": "exercises/Leg_Press/1.jpg",
+      "local_path": "media_sources/exercises/leg_press/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "f4e08d4ad4e6542f5dd923bbfabe9a28bf6c960bed02b1b9d65f6bafd6ceb051",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leg_Press/0.jpg",
+      "upstream_path": "exercises/Leg_Press/0.jpg",
+      "local_path": "media_sources/exercises/leg_press/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "55079d514ae8d4dbc526731bb5120748e74a084ebcd546eaa890fa273427f0dc",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leverage_Shoulder_Press/0.jpg",
+      "upstream_path": "exercises/Leverage_Shoulder_Press/0.jpg",
+      "local_path": "media_sources/exercises/machine_shoulder_press/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "f54417ed87011bddfe961e9f11a208705d716732926bbcf58eab31382230f73b",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leverage_Shoulder_Press/1.jpg",
+      "upstream_path": "exercises/Leverage_Shoulder_Press/1.jpg",
+      "local_path": "media_sources/exercises/machine_shoulder_press/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "94af6bd9748cfa75fb7ef36055301a1b20bcff56934240b117cf5ffeb0865567",
+      "role": "end"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/1.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly/1.jpg",
+      "upstream_path": "exercises/Butterfly/1.jpg",
+      "local_path": "media_sources/exercises/pec_deck/start.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "7f471857324312b07e14f3fe73dd783d2ecd3a3ff15f9f52e9813390cda314db",
+      "role": "start"
+    },
+    "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/0.jpg": {
+      "provider": "free-exercise-db",
+      "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+      "source_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly/0.jpg",
+      "upstream_path": "exercises/Butterfly/0.jpg",
+      "local_path": "media_sources/exercises/pec_deck/end.jpg",
+      "author": "free-exercise-db contributors",
+      "license": "Unlicense",
+      "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
+      "sha256": "8819cc3e699ff1d0b5d18c21a411a0e380fc0f316e83d9dcaa1207617f78ea23",
+      "role": "end"
+    }
+  },
   "exercises": {
-    "cardio_treadmill": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "cardio_elliptical": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "cardio_bike": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "seated_leg_curl": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "glute_kickback": {"card": null, "status": "text_only", "sha256": null, "source_ids": []},
-    "hip_abduction": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "lat_pulldown": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "chest_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "hack_squat": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "leg_extension": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "hip_adduction": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "seated_row": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "leg_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "machine_shoulder_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
-    "pec_deck": {"card": null, "status": "candidate", "sha256": null, "source_ids": []}
+    "cardio_treadmill": {
+      "card": "cardio_treadmill.png",
+      "status": "candidate",
+      "sha256": "159a7321490318f0263c3eeca394fe6187136b2c931e55b284408ec860c26d81",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/1.jpg"
+      ]
+    },
+    "cardio_elliptical": {
+      "card": "cardio_elliptical.png",
+      "status": "candidate",
+      "sha256": "100de1b218b2d6b036dae5eab72e1b5e8b193cd10afab386f8980ca3eda25774",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/1.jpg"
+      ]
+    },
+    "cardio_bike": {
+      "card": "cardio_bike.png",
+      "status": "candidate",
+      "sha256": "c00e7e517d2bb3bf788ce9108c72af61837c3947e50271b098cd4eebc8ac77c0",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/1.jpg"
+      ]
+    },
+    "seated_leg_curl": {
+      "card": "seated_leg_curl.png",
+      "status": "candidate",
+      "sha256": "4b42ad67ba1089434f178956bd9684c17253b17f76a25e121aa02ba03f57af72",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/1.jpg"
+      ]
+    },
+    "glute_kickback": {
+      "card": null,
+      "status": "text_only",
+      "sha256": null,
+      "source_ids": []
+    },
+    "hip_abduction": {
+      "card": "hip_abduction.png",
+      "status": "candidate",
+      "sha256": "78ddde2d76c556e9d8f5509ff897166c2725e2492416520159f1da1ff0f042e6",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/1.jpg"
+      ]
+    },
+    "lat_pulldown": {
+      "card": "lat_pulldown.png",
+      "status": "candidate",
+      "sha256": "d61539c878e94049fa92f537136f8342bf6f00abdb748931c2b4c063aa8ea798",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/1.jpg"
+      ]
+    },
+    "chest_press": {
+      "card": "chest_press.png",
+      "status": "candidate",
+      "sha256": "61402e7d42926dd0cd96c0b9fde19a86382944f0bbb9e2cccec06a45179a61fe",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/1.jpg"
+      ]
+    },
+    "hack_squat": {
+      "card": "hack_squat.png",
+      "status": "candidate",
+      "sha256": "d9ff638ef5c722d91b5d1ff6bb94d3c5450a074ad39f8033b1dd388d9b46baa1",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/1.jpg"
+      ]
+    },
+    "leg_extension": {
+      "card": "leg_extension.png",
+      "status": "candidate",
+      "sha256": "3b54e14b792480a39f66ad2a1387d4e71a5c5e2e5f349f485b64d2325374f379",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/1.jpg"
+      ]
+    },
+    "hip_adduction": {
+      "card": "hip_adduction.png",
+      "status": "candidate",
+      "sha256": "048c19bc99cca593109260a8ca3c2449abd37e49b0b3ffbe6cc284b76d470ba4",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/1.jpg"
+      ]
+    },
+    "seated_row": {
+      "card": "seated_row.png",
+      "status": "candidate",
+      "sha256": "42278d13385c5e72e3ca5bdece4c8ede16a73822a70948c1b1cc713aef2b079a",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/1.jpg"
+      ]
+    },
+    "leg_press": {
+      "card": "leg_press.png",
+      "status": "candidate",
+      "sha256": "db23a2d5f6bb8652c14f7fee78003421ad9cdaf214d83dcf355a6f608adc2674",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/1.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/0.jpg"
+      ]
+    },
+    "machine_shoulder_press": {
+      "card": "machine_shoulder_press.png",
+      "status": "candidate",
+      "sha256": "a11bd1120a410b30207ef3542e8fb0978d220b2086c584ac49d1731046680643",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/0.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/1.jpg"
+      ]
+    },
+    "pec_deck": {
+      "card": "pec_deck.png",
+      "status": "candidate",
+      "sha256": "4fa520dba65577bec5092349228714c8bac36649d98f49d0e7f018d27105e35f",
+      "source_ids": [
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/1.jpg",
+        "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/0.jpg"
+      ]
+    }
   }
 }
