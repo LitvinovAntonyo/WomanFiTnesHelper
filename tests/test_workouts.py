@@ -11,6 +11,7 @@ from app.models import (
     ExerciseResult,
     ExerciseSetResult,
     WorkoutSession,
+    WorkoutSessionFeedback,
     WorkoutTemplate,
 )
 from app.services.workouts import WeightChange
@@ -569,3 +570,79 @@ async def test_reset_current_day_returns_false_when_nothing_was_started(
 ):
     _, _, _, workouts, _, _ = app_services
     assert await workouts.reset_current_day(10001) is False
+
+
+@pytest.mark.asyncio
+async def test_light_mode_reduces_only_unstarted_strength_results(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    for _ in range(6):
+        await complete_workout(workouts, 10001)
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    first_strength = await workouts.get_step(workout.id, 10001)
+    assert first_strength is not None
+    await workouts.record_set(first_strength.result.id, 10001, reps=12, weight_kg=None)
+
+    changed = await workouts.enable_light_mode(workout.id, 10001)
+    plan = await workouts.get_plan(workout.id, 10001)
+    by_id = {result.id: result for result in plan.results}
+
+    assert changed == 4
+    assert by_id[first_strength.result.id].sets_planned == 3
+    assert all(
+        result.sets_planned == 2
+        for result in plan.results
+        if result.id != first_strength.result.id and result.reps is not None
+    )
+
+
+@pytest.mark.asyncio
+async def test_discomfort_stops_current_exercise_immediately(app_services, onboarded_user):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+
+    session_id = await workouts.stop_for_discomfort(step.result.id, 10001)
+
+    assert session_id == workout.id
+    next_step = await workouts.get_step(workout.id, 10001)
+    assert next_step is not None
+    assert next_step.result.id != step.result.id
+    async with database.session() as session:
+        result = await session.get(ExerciseResult, step.result.id)
+        outcome = await session.scalar(
+            select(ExerciseOutcome).where(
+                ExerciseOutcome.exercise_result_id == step.result.id
+            )
+        )
+    assert result is not None
+    assert result.completed
+    assert result.completed_sets == 0
+    assert outcome is not None
+    assert outcome.status == outcome.effort == "pain"
+
+
+@pytest.mark.asyncio
+async def test_session_feedback_is_one_validated_row(app_services, onboarded_user):
+    _, database, _, workouts, _, _ = app_services
+    workout_id = await complete_workout(workouts, 10001)
+
+    await workouts.record_session_feedback(workout_id, 10001, "ok")
+    await workouts.record_session_feedback(workout_id, 10001, "hard")
+    with pytest.raises(ValueError, match="оцен"):
+        await workouts.record_session_feedback(workout_id, 10001, "pain")
+
+    async with database.session() as session:
+        rows = list((await session.scalars(select(WorkoutSessionFeedback))).all())
+    assert len(rows) == 1
+    assert rows[0].effort == "hard"

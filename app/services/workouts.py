@@ -23,6 +23,7 @@ from app.models import (
     User,
     WorkoutExercise,
     WorkoutSession,
+    WorkoutSessionFeedback,
     WorkoutTemplate,
     utc_now,
 )
@@ -625,6 +626,85 @@ class WorkoutService:
             outcome.effort = None
             result.completed = True
             return result.session_id
+
+    async def enable_light_mode(self, session_id: int, telegram_id: int) -> int:
+        """Reduce only untouched strength exercises to two planned sets."""
+        async with self.database.session() as session:
+            workout = await session.scalar(
+                select(WorkoutSession)
+                .join(User)
+                .where(WorkoutSession.id == session_id, User.telegram_id == telegram_id)
+            )
+            if workout is None:
+                raise ValueError("Тренировка не найдена")
+
+            results = list(
+                (
+                    await session.scalars(
+                        select(ExerciseResult).where(
+                            ExerciseResult.session_id == workout.id,
+                            ExerciseResult.reps.is_not(None),
+                            ExerciseResult.completed_sets == 0,
+                            ExerciseResult.completed.is_(False),
+                        )
+                    )
+                ).all()
+            )
+            changed = 0
+            for result in results:
+                reduced_sets = min(result.sets_planned, 2)
+                if reduced_sets != result.sets_planned:
+                    result.sets_planned = reduced_sets
+                    changed += 1
+            return changed
+
+    async def stop_for_discomfort(self, result_id: int, telegram_id: int) -> int:
+        """Stop the current exercise without inventing completed sets."""
+        async with self.database.session() as session:
+            result = await session.scalar(
+                select(ExerciseResult)
+                .options(joinedload(ExerciseResult.outcome))
+                .join(WorkoutSession)
+                .join(User)
+                .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
+            )
+            if result is None:
+                raise ValueError("Упражнение не найдено")
+            outcome = result.outcome
+            if outcome is None:
+                outcome = ExerciseOutcome(exercise_result_id=result.id)
+                session.add(outcome)
+            outcome.status = "pain"
+            outcome.effort = "pain"
+            result.completed = True
+            return result.session_id
+
+    async def record_session_feedback(
+        self, session_id: int, telegram_id: int, effort: str
+    ) -> None:
+        if effort not in {"easy", "ok", "hard"}:
+            raise ValueError("Выбери оценку тренировки: легко, нормально или тяжело")
+        async with self.database.session() as session:
+            workout = await session.scalar(
+                select(WorkoutSession)
+                .join(User)
+                .where(
+                    WorkoutSession.id == session_id,
+                    WorkoutSession.status == "completed",
+                    User.telegram_id == telegram_id,
+                )
+            )
+            if workout is None:
+                raise ValueError("Завершённая тренировка не найдена")
+            feedback = await session.scalar(
+                select(WorkoutSessionFeedback).where(
+                    WorkoutSessionFeedback.session_id == workout.id
+                )
+            )
+            if feedback is None:
+                session.add(WorkoutSessionFeedback(session_id=workout.id, effort=effort))
+            else:
+                feedback.effort = effort
 
     async def record_effort(
         self, result_id: int, telegram_id: int, effort: str | None
