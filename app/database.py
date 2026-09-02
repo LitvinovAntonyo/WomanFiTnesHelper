@@ -39,9 +39,8 @@ class Database:
     async def initialize(self) -> None:
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
-            # Version 2 is additive: outcome and Telegram media-cache tables.
-            # create_all safely creates them for an existing v1 SQLite database.
-            await connection.execute(text("PRAGMA user_version=2"))
+            # Version 3 is additive: create_all safely extends existing SQLite databases.
+            await connection.execute(text("PRAGMA user_version=3"))
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

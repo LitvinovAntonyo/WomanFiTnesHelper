@@ -149,6 +149,9 @@ class WorkoutSession(TimestampMixin, Base):
     results: Mapped[list[ExerciseResult]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    feedback: Mapped[WorkoutSessionFeedback | None] = relationship(
+        back_populates="session", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class ExerciseResult(TimestampMixin, Base):
@@ -171,6 +174,42 @@ class ExerciseResult(TimestampMixin, Base):
     outcome: Mapped[ExerciseOutcome | None] = relationship(
         back_populates="result", cascade="all, delete-orphan", uselist=False
     )
+    sets_log: Mapped[list[ExerciseSetResult]] = relationship(
+        back_populates="result",
+        cascade="all, delete-orphan",
+        order_by="ExerciseSetResult.set_number",
+    )
+
+
+class ExerciseSetResult(TimestampMixin, Base):
+    __tablename__ = "exercise_set_results"
+    __table_args__ = (
+        UniqueConstraint("exercise_result_id", "set_number"),
+        Index("ix_set_results_result", "exercise_result_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exercise_result_id: Mapped[int] = mapped_column(
+        ForeignKey("exercise_results.id", ondelete="CASCADE"), nullable=False
+    )
+    set_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    reps: Mapped[int] = mapped_column(Integer, nullable=False)
+    weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    result: Mapped[ExerciseResult] = relationship(back_populates="sets_log")
+
+
+class WorkoutSessionFeedback(TimestampMixin, Base):
+    __tablename__ = "workout_session_feedback"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_sessions.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    effort: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    session: Mapped[WorkoutSession] = relationship(back_populates="feedback")
 
 
 class ExerciseOutcome(TimestampMixin, Base):
