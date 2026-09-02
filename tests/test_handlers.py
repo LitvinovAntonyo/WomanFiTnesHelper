@@ -8,10 +8,11 @@ from typing import Any
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
+from aiogram.fsm.storage.base import StorageKey
 from aiogram.methods import TelegramMethod
 from aiogram.types import CallbackQuery, Chat, Message, Update
 from aiogram.types import User as TelegramUser
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.context import AppContext
 from app.handlers import build_routers
@@ -80,6 +81,10 @@ def callback_update(update_id: int, data: str) -> Update:
             data=data,
         ),
     )
+
+
+def workout_storage_key(bot: Bot) -> StorageKey:
+    return StorageKey(bot_id=bot.id, chat_id=10001, user_id=10001)
 
 
 @pytest.mark.asyncio
@@ -283,6 +288,159 @@ async def test_pain_advances_and_completed_session_collects_feedback(
         )
     assert feedback is not None
     assert feedback.effort == "ok"
+
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_repeat_clears_pending_set_input_even_when_it_finishes_exercise(
+    app_services, onboarded_user, monkeypatch
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    async def fake_start_rest(
+        rest_tasks, context, message, telegram_id, result_id, seconds
+    ):
+        return None
+
+    monkeypatch.setattr(workout_module, "start_rest_task", fake_start_rest)
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await dispatcher.feed_update(
+        bot, callback_update(400, f"exercise:set:{cardio.result.id}")
+    )
+    strength = await workouts.get_step(workout.id, 10001)
+    assert strength is not None
+
+    await dispatcher.feed_update(
+        bot, callback_update(401, f"exercise:log:{strength.result.id}")
+    )
+    await dispatcher.feed_update(bot, user_message(402, "20 12"))
+    await dispatcher.feed_update(
+        bot, callback_update(403, f"exercise:log:{strength.result.id}")
+    )
+    assert (
+        await dispatcher.storage.get_state(workout_storage_key(bot))
+        == "WorkoutInput:set_result"
+    )
+
+    await dispatcher.feed_update(
+        bot, callback_update(404, f"exercise:repeat:{strength.result.id}")
+    )
+
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    await dispatcher.feed_update(bot, user_message(405, "30 10"))
+    async with database.session() as database_session:
+        logged_sets = list(
+            (
+                await database_session.scalars(
+                    select(ExerciseSetResult).where(
+                        ExerciseSetResult.exercise_result_id == strength.result.id
+                    )
+                )
+            ).all()
+        )
+    assert len(logged_sets) == 2
+    assert all(row.weight_kg == Decimal("20.00") for row in logged_sets)
+
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_skip_replace_and_pain_clear_pending_set_input(
+    app_services, onboarded_user
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await dispatcher.feed_update(
+        bot, callback_update(500, f"exercise:set:{cardio.result.id}")
+    )
+    skipped = await workouts.get_step(workout.id, 10001)
+    assert skipped is not None
+
+    await dispatcher.feed_update(
+        bot, callback_update(501, f"exercise:log:{skipped.result.id}")
+    )
+    await dispatcher.feed_update(
+        bot, callback_update(502, f"exercise:skip:{skipped.result.id}")
+    )
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    await dispatcher.feed_update(bot, user_message(503, "25 12"))
+
+    replaced = await workouts.get_step(workout.id, 10001)
+    assert replaced is not None
+    assert replaced.exercise.code == "glute_kickback"
+    await dispatcher.feed_update(
+        bot, callback_update(504, f"exercise:log:{replaced.result.id}")
+    )
+    await dispatcher.feed_update(
+        bot, callback_update(505, f"exercise:replace:{replaced.result.id}")
+    )
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    await dispatcher.feed_update(bot, user_message(506, "25 12"))
+
+    painful = await workouts.get_step(workout.id, 10001)
+    assert painful is not None
+    assert painful.result.id == replaced.result.id
+    await dispatcher.feed_update(
+        bot, callback_update(507, f"exercise:log:{painful.result.id}")
+    )
+    await dispatcher.feed_update(
+        bot, callback_update(508, f"exercise:pain:{painful.result.id}")
+    )
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    await dispatcher.feed_update(bot, user_message(509, "25 12"))
+
+    async with database.session() as database_session:
+        set_count = await database_session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id.in_(
+                    (skipped.result.id, replaced.result.id)
+                )
+            )
+        )
+    assert set_count == 0
 
     await llm.close()
     await bot.session.close()

@@ -329,6 +329,81 @@ async def test_record_set_rejects_stale_callback_after_skip(
 
 
 @pytest.mark.asyncio
+async def test_record_set_rejects_an_older_session_card(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    completed_session_id = await complete_workout(workouts, 10001)
+    async with database.session() as session:
+        old_strength_id = await session.scalar(
+            select(ExerciseResult.id)
+            .where(
+                ExerciseResult.session_id == completed_session_id,
+                ExerciseResult.reps.is_not(None),
+            )
+            .limit(1)
+        )
+    assert old_strength_id is not None
+
+    current_workout = await workouts.active_or_new(10001)
+    await workouts.begin(current_workout.id, 10001)
+    with pytest.raises(ValueError, match="текущ"):
+        await workouts.record_set(
+            old_strength_id,
+            10001,
+            reps=12,
+            weight_kg=Decimal("25"),
+        )
+
+    async with database.session() as session:
+        row_count = await session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == old_strength_id
+            )
+        )
+    assert row_count == 0
+
+
+@pytest.mark.asyncio
+async def test_record_set_rejects_a_future_result_in_the_active_session(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    current = await workouts.get_step(workout.id, 10001)
+    assert current is not None
+    async with database.session() as session:
+        future_result_id = await session.scalar(
+            select(ExerciseResult.id)
+            .join(WorkoutExercise)
+            .where(
+                ExerciseResult.session_id == workout.id,
+                WorkoutExercise.position > current.item.position,
+            )
+            .order_by(WorkoutExercise.position)
+            .limit(1)
+        )
+    assert future_result_id is not None
+
+    with pytest.raises(ValueError, match="текущ"):
+        await workouts.record_set(
+            future_result_id,
+            10001,
+            reps=12,
+            weight_kg=Decimal("25"),
+        )
+
+    async with database.session() as session:
+        row_count = await session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == future_result_id
+            )
+        )
+    assert row_count == 0
+
+
+@pytest.mark.asyncio
 async def test_repeat_last_set_copies_weight_and_reps(app_services, onboarded_user):
     _, _, _, workouts, _, _ = app_services
     workout = await workouts.active_or_new(10001)

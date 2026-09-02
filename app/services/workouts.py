@@ -839,6 +839,7 @@ class WorkoutService:
                 result = await session.scalar(
                     select(ExerciseResult)
                     .options(
+                        joinedload(ExerciseResult.session),
                         joinedload(ExerciseResult.workout_exercise).joinedload(
                             WorkoutExercise.exercise
                         ),
@@ -855,8 +856,22 @@ class WorkoutService:
                 )
                 if result is None:
                     raise ValueError("Упражнение не найдено")
+                if result.session.status != "active":
+                    raise ValueError("Этот подход больше не является текущим")
                 if result.completed or result.completed_sets >= result.sets_planned:
                     raise ValueError("Упражнение уже завершено")
+                current_result_id = await session.scalar(
+                    select(ExerciseResult.id)
+                    .join(WorkoutExercise)
+                    .where(
+                        ExerciseResult.session_id == result.session_id,
+                        ExerciseResult.completed.is_(False),
+                    )
+                    .order_by(WorkoutExercise.position)
+                    .limit(1)
+                )
+                if current_result_id != result.id:
+                    raise ValueError("Этот подход больше не является текущим")
 
                 next_number = result.completed_sets + 1
                 session.add(

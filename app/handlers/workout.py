@@ -328,6 +328,10 @@ def build_workout_router(context: AppContext) -> Router:
     router = Router(name="workout")
     rest_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
+    async def clear_pending_set_input(state: FSMContext) -> None:
+        if await state.get_state() == WorkoutInput.set_result.state:
+            await state.clear()
+
     async def send_current_step(
         message: Message, session_id: int, telegram_id: int
     ) -> None:
@@ -436,8 +440,9 @@ def build_workout_router(context: AppContext) -> Router:
             await ask_for_cardio(message, workout.id)
 
     @router.message(F.text == RESET_TODAY_TEXT)
-    async def reset_current_day(message: Message) -> None:
+    async def reset_current_day(message: Message, state: FSMContext) -> None:
         assert message.from_user is not None
+        await clear_pending_set_input(state)
         for key, task in list(rest_tasks.items()):
             if key[0] == message.from_user.id:
                 task.cancel()
@@ -479,14 +484,18 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Тренировка подтверждена")
 
     @router.callback_query(F.data.startswith("session:start:"))
-    async def start_session(callback: CallbackQuery) -> None:
+    async def start_session(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         session_id = int((callback.data or "").rsplit(":", 1)[1])
         if callback.message:
             await ask_for_cardio(callback.message, session_id)
         await callback.answer()
 
     @router.callback_query(F.data.startswith("session:light:"))
-    async def enable_light_session(callback: CallbackQuery) -> None:
+    async def enable_light_session(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
         session_id = int((callback.data or "").rsplit(":", 1)[1])
         try:
             changed = await context.workouts.enable_light_mode(
@@ -509,7 +518,8 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Облегчённый режим включён")
 
     @router.callback_query(F.data.startswith("cardio:select:"))
-    async def select_cardio(callback: CallbackQuery) -> None:
+    async def select_cardio(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         _, _, raw_session_id, cardio_code = (callback.data or "").split(":")
         session_id = int(raw_session_id)
         await context.workouts.choose_cardio(session_id, callback.from_user.id, cardio_code)
@@ -523,6 +533,7 @@ def build_workout_router(context: AppContext) -> Router:
 
     @router.callback_query(F.data.startswith("exercise:set:"))
     async def complete_set(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         task = rest_tasks.pop((callback.from_user.id, result_id), None)
         if task:
@@ -613,7 +624,8 @@ def build_workout_router(context: AppContext) -> Router:
         )
 
     @router.callback_query(F.data.startswith("exercise:repeat:"))
-    async def repeat_set(callback: CallbackQuery) -> None:
+    async def repeat_set(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         try:
             logged_set = await context.workouts.repeat_last_set(
@@ -634,6 +646,7 @@ def build_workout_router(context: AppContext) -> Router:
     async def stop_for_pain(
         callback: CallbackQuery, state: FSMContext
     ) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         task = rest_tasks.pop((callback.from_user.id, result_id), None)
         if task:
@@ -645,7 +658,6 @@ def build_workout_router(context: AppContext) -> Router:
         except ValueError as exc:
             await callback.answer(str(exc), show_alert=True)
             return
-        await state.clear()
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
@@ -659,7 +671,8 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Упражнение остановлено")
 
     @router.callback_query(F.data.startswith("effort:"))
-    async def record_effort(callback: CallbackQuery) -> None:
+    async def record_effort(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         _, raw_result_id, effort = (callback.data or "").split(":")
         result_id = int(raw_result_id)
         session_id = await context.workouts.record_effort(
@@ -679,7 +692,10 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Оценка сохранена")
 
     @router.callback_query(F.data.startswith("session:feedback:"))
-    async def record_session_feedback(callback: CallbackQuery) -> None:
+    async def record_session_feedback(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
         _, _, raw_session_id, effort = (callback.data or "").split(":")
         try:
             await context.workouts.record_session_feedback(
@@ -699,7 +715,10 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Оценка сохранена")
 
     @router.callback_query(F.data.startswith("exercise:replace:"))
-    async def replace_exercise(callback: CallbackQuery) -> None:
+    async def replace_exercise(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         try:
             session_id = await context.workouts.replace_exercise(
@@ -716,7 +735,8 @@ def build_workout_router(context: AppContext) -> Router:
         await callback.answer("Упражнение заменено")
 
     @router.callback_query(F.data.startswith("exercise:skip:"))
-    async def skip_exercise(callback: CallbackQuery) -> None:
+    async def skip_exercise(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         task = rest_tasks.pop((callback.from_user.id, result_id), None)
         if task:
@@ -733,7 +753,10 @@ def build_workout_router(context: AppContext) -> Router:
 
     # Compatibility for buttons already sent by the previous deployed version.
     @router.callback_query(F.data.startswith("exercise:done:"))
-    async def complete_legacy_exercise(callback: CallbackQuery) -> None:
+    async def complete_legacy_exercise(
+        callback: CallbackQuery, state: FSMContext
+    ) -> None:
+        await clear_pending_set_input(state)
         result_id = int((callback.data or "").rsplit(":", 1)[1])
         session_id = await context.workouts.complete_exercise(result_id, callback.from_user.id)
         await context.workouts.record_effort(result_id, callback.from_user.id, None)
