@@ -127,6 +127,7 @@ class WorkoutService:
         exercise_id: int,
         excluded_session_id: int,
         require_weight: bool = False,
+        completed_before: datetime | None = None,
     ) -> ExerciseSetResult | None:
         statement = (
             select(ExerciseSetResult)
@@ -158,6 +159,10 @@ class WorkoutService:
         )
         if require_weight:
             statement = statement.where(ExerciseSetResult.weight_kg.is_not(None))
+        if completed_before is not None:
+            statement = statement.where(
+                WorkoutSession.completed_at < completed_before
+            )
         return await session.scalar(statement)
 
     async def seed_templates(self) -> None:
@@ -736,7 +741,7 @@ class WorkoutService:
                 )
                 if result is None:
                     raise ValueError("Упражнение не найдено")
-                if result.completed_sets >= result.sets_planned:
+                if result.completed or result.completed_sets >= result.sets_planned:
                     raise ValueError("Упражнение уже завершено")
 
                 next_number = result.completed_sets + 1
@@ -948,6 +953,7 @@ class WorkoutService:
                     exercise_id=exercise.id,
                     excluded_session_id=workout.id,
                     require_weight=True,
+                    completed_before=workout.completed_at,
                 )
                 if (
                     previous_set is not None

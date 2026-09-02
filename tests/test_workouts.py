@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from app.exercise_library import rest_seconds_for
 from app.models import (
+    ExerciseOutcome,
     ExerciseResult,
     ExerciseSetResult,
     WorkoutSession,
@@ -284,6 +285,47 @@ async def test_record_set_rejects_invalid_weight(
 
 
 @pytest.mark.asyncio
+async def test_record_set_rejects_stale_callback_after_skip(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+    await workouts.skip_exercise(step.result.id, 10001)
+
+    with pytest.raises(ValueError, match="уже завершено"):
+        await workouts.record_set(
+            step.result.id,
+            10001,
+            reps=12,
+            weight_kg=Decimal("25"),
+        )
+
+    async with database.session() as session:
+        stored = await session.get(ExerciseResult, step.result.id)
+        set_count = await session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == step.result.id
+            )
+        )
+        outcome_status = await session.scalar(
+            select(ExerciseOutcome.status).where(
+                ExerciseOutcome.exercise_result_id == step.result.id
+            )
+        )
+    assert stored is not None
+    assert stored.completed
+    assert stored.completed_sets == 0
+    assert set_count == 0
+    assert outcome_status == "skipped"
+
+
+@pytest.mark.asyncio
 async def test_repeat_last_set_copies_weight_and_reps(app_services, onboarded_user):
     _, _, _, workouts, _, _ = app_services
     workout = await workouts.active_or_new(10001)
@@ -365,6 +407,33 @@ async def test_summary_reports_change_from_final_logged_set(
             current_kg=Decimal("27.50"),
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_summary_of_older_session_ignores_newer_workout(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
+    older_id = await complete_workout_with_weighted_sets(
+        workouts,
+        10001,
+        "leg_press",
+        (Decimal("22.5"), Decimal("25")),
+    )
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
+    await complete_workout_with_weighted_sets(
+        workouts,
+        10001,
+        "leg_press",
+        (Decimal("25"), Decimal("27.5")),
+    )
+
+    summary = await workouts.summary(older_id)
+
+    assert summary.weight_changes == ()
 
 
 @pytest.mark.asyncio
