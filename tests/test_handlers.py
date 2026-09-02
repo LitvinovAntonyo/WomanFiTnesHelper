@@ -298,7 +298,7 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
 
 @pytest.mark.asyncio
 async def test_photo_send_failure_falls_back_to_text_and_actions(
-    app_services, onboarded_user
+    app_services, onboarded_user, monkeypatch, tmp_path
 ):
     settings, database, users, workouts, progress, _ = app_services
     session = PhotoFailingSession()
@@ -308,6 +308,9 @@ async def test_photo_send_failure_falls_back_to_text_and_actions(
     context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
     dispatcher = Dispatcher()
     dispatcher.include_routers(*build_routers(context))
+    card = tmp_path / "approved-card.png"
+    card.write_bytes(b"test-card")
+    monkeypatch.setattr(workout_module, "card_path_for", lambda _code: card)
     workout = await workouts.active_or_new(10001)
     await workouts.choose_cardio(workout.id, 10001, "cardio_treadmill")
     await workouts.begin(workout.id, 10001)
@@ -317,6 +320,7 @@ async def test_photo_send_failure_falls_back_to_text_and_actions(
     )
 
     texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any(isinstance(method, SendPhoto) for method in session.methods)
     assert any("1/6 · Кардио" in text for text in texts)
     technique = next(method for method in session.methods if "Техника —" in (getattr(method, "text", "") or ""))
     callbacks = [

@@ -14,7 +14,7 @@ from app.exercise_assets import (
 )
 
 
-def write_manifest(tmp_path, exercises: dict[str, dict[str, object]]) -> None:
+def write_manifest(tmp_path, exercises: object) -> None:
     (tmp_path / "manifest.json").write_text(
         json.dumps(
             {
@@ -123,6 +123,22 @@ def test_manifest_rejects_a_non_string_status(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="status"):
         asset_for("seated_row")
+
+
+def test_manifest_rejects_a_present_null_exercise_entry(tmp_path, monkeypatch):
+    write_manifest(tmp_path, {"leg_press": None})
+    use_manifest(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="must be an object"):
+        asset_for("leg_press")
+
+
+def test_manifest_rejects_a_non_object_exercises_section(tmp_path, monkeypatch):
+    write_manifest(tmp_path, [])
+    use_manifest(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="must contain exercises"):
+        asset_for("leg_press")
 
 
 @pytest.mark.parametrize(

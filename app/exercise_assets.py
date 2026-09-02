@@ -94,10 +94,10 @@ def _parse_asset(code: str, raw_asset: object) -> ExerciseAsset:
 
 
 def asset_for(code: str) -> ExerciseAsset | None:
-    raw_asset = _load_entries().get(code)
-    if raw_asset is None:
+    entries = _load_entries()
+    if code not in entries:
         return None
-    return _parse_asset(code, raw_asset)
+    return _parse_asset(code, entries[code])
 
 
 def card_path_for(code: str) -> Path | None:
