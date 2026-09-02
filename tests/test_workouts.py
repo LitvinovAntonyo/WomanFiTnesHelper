@@ -80,10 +80,11 @@ async def test_plan_contains_all_exercises_in_prescribed_order(
     items = sorted(plan.template.items, key=lambda item: item.position)
     assert [item.exercise.code for item in items] == [
         "cardio_treadmill",
-        "leg_press",
         "seated_leg_curl",
         "glute_kickback",
         "hip_abduction",
+        "lat_pulldown",
+        "chest_press",
     ]
     assert all(result.sets_planned == 2 for result in plan.results[1:])
 
@@ -109,6 +110,8 @@ async def test_leg_press_can_be_replaced_with_hack_squat(
     app_services, onboarded_user
 ):
     _, _, _, workouts, _, _ = app_services
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
     workout = await workouts.active_or_new(10001)
     await workouts.begin(workout.id, 10001)
     cardio = await workouts.get_step(workout.id, 10001)
@@ -174,21 +177,22 @@ async def test_two_easy_repeats_add_only_one_rep_next_time(
     app_services, onboarded_user
 ):
     _, _, _, workouts, _, _ = app_services
-    await complete_workout_with_efforts(workouts, 10001, {"leg_press": "easy"})
+    await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
     await complete_workout_with_efforts(workouts, 10001, {})
-    await complete_workout_with_efforts(workouts, 10001, {"leg_press": "easy"})
+    await complete_workout_with_efforts(workouts, 10001, {})
+    await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
 
     next_workout = await workouts.active_or_new(10001)
     plan = await workouts.get_plan(next_workout.id, 10001)
     items = {item.id: item.exercise.code for item in plan.template.items}
-    leg_press_result = next(
+    chest_press_result = next(
         result
         for result in plan.results
-        if items[result.workout_exercise_id] == "leg_press"
+        if items[result.workout_exercise_id] == "chest_press"
     )
 
-    assert leg_press_result.reps == 13
-    assert leg_press_result.sets_planned == 2
+    assert chest_press_result.reps == 13
+    assert chest_press_result.sets_planned == 3
 
 
 @pytest.mark.asyncio
@@ -218,7 +222,7 @@ async def test_legacy_history_does_not_skip_return_program_ramp_up(
     workout = await workouts.active_or_new(10001)
     plan = await workouts.get_plan(workout.id, 10001)
 
-    assert plan.template.code == "return_lower_posterior_a_v3"
+    assert plan.template.code == "return_full_body_a_v4"
     assert all(result.sets_planned == 2 for result in plan.results if result.reps)
 
 

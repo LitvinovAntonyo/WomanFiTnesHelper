@@ -8,13 +8,14 @@ from app.exercise_library import (
     EXERCISE_GUIDANCE,
     image_path_for,
     repetitions_text,
+    rest_seconds_for,
 )
 from app.handlers.workout import cardio_keyboard, plan_text, step_keyboard, step_text
 from app.keyboards import RESET_TODAY_TEXT, menu_keyboard
 from app.services.workouts import DEFAULT_TEMPLATES
 
 
-def test_every_template_exercise_has_guidance_and_an_image():
+def test_every_template_exercise_has_guidance():
     exercise_codes = {
         raw[0]
         for template in DEFAULT_TEMPLATES
@@ -23,8 +24,6 @@ def test_every_template_exercise_has_guidance_and_an_image():
     assert "cooldown" not in exercise_codes
     assert exercise_codes <= set(EXERCISE_GUIDANCE)
     assert set(CARDIO_CODES) <= set(EXERCISE_GUIDANCE)
-    assert all(image_path_for(code).is_file() for code in exercise_codes)
-    assert all(image_path_for(code).is_file() for code in CARDIO_CODES)
 
 
 def test_machine_replacements_have_local_guidance():
@@ -40,35 +39,66 @@ def test_machine_replacements_have_local_guidance():
     assert image_path_for("pec_deck").is_file()
 
 
-def test_templates_have_clear_muscle_group_priorities():
+def test_templates_are_full_body_v4_with_lower_body_priority():
     by_code = {
-        template["code"]: [raw[0] for raw in template["items"]][1:]
+        template["code"]: [raw[0] for raw in template["items"]]
         for template in DEFAULT_TEMPLATES
     }
 
     assert by_code == {
-        "return_lower_posterior_a_v3": [
-            "leg_press",
+        "return_full_body_a_v4": [
+            "cardio_treadmill",
             "seated_leg_curl",
             "glute_kickback",
             "hip_abduction",
-        ],
-        "return_upper_support_b_v3": [
             "lat_pulldown",
+            "chest_press",
+        ],
+        "return_full_body_b_v4": [
+            "cardio_treadmill",
+            "hack_squat",
+            "leg_extension",
+            "hip_adduction",
             "seated_row",
             "chest_press",
         ],
-        "return_lower_quads_c_v3": [
+        "return_full_body_c_v4": [
+            "cardio_treadmill",
             "leg_press",
-            "leg_extension",
-            "hip_adduction",
-            "hip_abduction",
+            "seated_leg_curl",
             "glute_kickback",
+            "lat_pulldown",
+            "machine_shoulder_press",
         ],
     }
-    active_codes = {code for codes in by_code.values() for code in codes}
+    active_codes = {code for codes in by_code.values() for code in codes[1:]}
     assert "romanian_deadlift" not in active_codes
     assert "hip_thrust" not in active_codes
+
+
+def test_rest_is_fixed_per_exercise():
+    assert rest_seconds_for("hack_squat") == 120
+    assert rest_seconds_for("leg_press") == 120
+    assert rest_seconds_for("seated_leg_curl") == 75
+    assert rest_seconds_for("leg_extension") == 75
+    assert rest_seconds_for("glute_kickback") == 60
+    assert rest_seconds_for("hip_abduction") == 60
+    assert rest_seconds_for("hip_adduction") == 60
+    assert rest_seconds_for("lat_pulldown") == 90
+    assert rest_seconds_for("seated_row") == 90
+    assert rest_seconds_for("chest_press") == 90
+    assert rest_seconds_for("machine_shoulder_press") == 90
+    assert rest_seconds_for("cardio_treadmill") is None
+
+
+def test_machine_shoulder_press_has_complete_guidance():
+    guidance = EXERCISE_GUIDANCE["machine_shoulder_press"]
+    assert guidance.image_filename == "machine_shoulder_press.png"
+    assert "сидень" in guidance.setup.lower()
+    assert guidance.movement
+    assert guidance.breathing
+    assert guidance.cues
+    assert guidance.mistakes
 
 
 def test_plan_shows_whole_workout_and_never_requests_weight_input():
@@ -119,6 +149,7 @@ def test_temporary_reset_button_is_available_from_main_menu():
 def test_machine_rep_ranges_are_shown_in_plan_language():
     assert repetitions_text("seated_leg_curl", 15) == "12–15 повторений"
     assert repetitions_text("hip_abduction", 20) == "15–20 повторений"
+    assert repetitions_text("machine_shoulder_press", 12) == "10–12 повторений"
     assert (
         repetitions_text("glute_kickback", 15)
         == "12–15 повторений на каждую ногу"

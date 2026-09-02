@@ -40,11 +40,26 @@ EXERCISE_ALTERNATIVES: dict[str, str] = {
 }
 
 REP_RANGE_WIDTH: dict[str, int] = {
+    "machine_shoulder_press": 2,
     "seated_leg_curl": 3,
     "glute_kickback": 3,
     "leg_extension": 3,
     "hip_abduction": 5,
     "hip_adduction": 5,
+}
+
+REST_SECONDS_BY_EXERCISE: dict[str, int] = {
+    "hack_squat": 120,
+    "leg_press": 120,
+    "seated_leg_curl": 75,
+    "leg_extension": 75,
+    "glute_kickback": 60,
+    "hip_abduction": 60,
+    "hip_adduction": 60,
+    "lat_pulldown": 90,
+    "seated_row": 90,
+    "chest_press": 90,
+    "machine_shoulder_press": 90,
 }
 
 
@@ -175,6 +190,15 @@ EXERCISE_GUIDANCE: dict[str, ExerciseGuidance] = {
         cues="Предплечья продолжают линию рукоятей, плечи не тянутся к ушам, поясница сохраняет естественный небольшой изгиб.",
         mistakes="Не отрывай лопатки и голову, не заламывай кисти, не уводи локти далеко за корпус и не бросай вес назад.",
     ),
+    "machine_shoulder_press": ExerciseGuidance(
+        image_filename="machine_shoulder_press.png",
+        weight_label="оставь 2–3 технически чистых повтора в запасе",
+        setup="Отрегулируй сиденье так, чтобы рукояти находились примерно на уровне плеч. Прижми таз и спину к опоре, поставь стопы полностью на пол и возьмись за рукояти нейтральным или прямым хватом.",
+        movement="Выжми рукояти вверх по траектории тренажёра, не поднимая плечи к ушам. Остановись до жёсткой блокировки локтей и плавно верни рукояти к уровню плеч.",
+        breathing="Выдох во время жима вверх, вдох при контролируемом возвращении.",
+        cues="Корпус остаётся на спинке, рёбра не выталкиваются вперёд, предплечья следуют за рукоятями.",
+        mistakes="Не прогибай поясницу, не опускай рукояти ниже комфортного диапазона плеч, не бросай вес и не блокируй локти.",
+    ),
     "pec_deck": ExerciseGuidance(
         image_filename="pec_deck.png",
         weight_label="комфортный, без записи в боте",
@@ -242,6 +266,10 @@ def image_path_for(code: str) -> Path:
 
 def alternative_code_for(code: str) -> str | None:
     return EXERCISE_ALTERNATIVES.get(code)
+
+
+def rest_seconds_for(code: str) -> int | None:
+    return REST_SECONDS_BY_EXERCISE.get(code)
 
 
 def repetitions_text(code: str, upper_reps: int | None) -> str:
