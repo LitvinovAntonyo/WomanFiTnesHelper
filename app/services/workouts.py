@@ -6,6 +6,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -663,20 +664,52 @@ class WorkoutService:
         async with self.database.session() as session:
             result = await session.scalar(
                 select(ExerciseResult)
-                .options(joinedload(ExerciseResult.outcome))
                 .join(WorkoutSession)
                 .join(User)
                 .where(ExerciseResult.id == result_id, User.telegram_id == telegram_id)
             )
             if result is None:
                 raise ValueError("Упражнение не найдено")
-            outcome = result.outcome
-            if outcome is None:
-                outcome = ExerciseOutcome(exercise_result_id=result.id)
-                session.add(outcome)
-            outcome.status = "pain"
-            outcome.effort = "pain"
-            result.completed = True
+            workout = await session.get(WorkoutSession, result.session_id)
+            if workout is None or workout.status != "active":
+                raise ValueError("Остановить можно только текущее упражнение")
+            current_result_id = await session.scalar(
+                select(ExerciseResult.id)
+                .join(WorkoutExercise)
+                .where(
+                    ExerciseResult.session_id == workout.id,
+                    ExerciseResult.completed.is_(False),
+                )
+                .order_by(WorkoutExercise.position)
+                .limit(1)
+            )
+            if current_result_id != result.id:
+                raise ValueError("Остановить можно только текущее упражнение")
+            stopped = await session.execute(
+                update(ExerciseResult)
+                .where(
+                    ExerciseResult.id == result.id,
+                    ExerciseResult.completed.is_(False),
+                )
+                .values(completed=True)
+            )
+            if stopped.rowcount != 1:
+                raise ValueError("Остановить можно только текущее упражнение")
+            pain_outcome = sqlite_insert(ExerciseOutcome).values(
+                exercise_result_id=result.id,
+                status="pain",
+                effort="pain",
+            )
+            await session.execute(
+                pain_outcome.on_conflict_do_update(
+                    index_elements=[ExerciseOutcome.exercise_result_id],
+                    set_={
+                        "status": "pain",
+                        "effort": "pain",
+                        "updated_at": utc_now(),
+                    },
+                )
+            )
             return result.session_id
 
     async def record_session_feedback(
@@ -696,15 +729,16 @@ class WorkoutService:
             )
             if workout is None:
                 raise ValueError("Завершённая тренировка не найдена")
-            feedback = await session.scalar(
-                select(WorkoutSessionFeedback).where(
-                    WorkoutSessionFeedback.session_id == workout.id
+            feedback_upsert = sqlite_insert(WorkoutSessionFeedback).values(
+                session_id=workout.id,
+                effort=effort,
+            )
+            await session.execute(
+                feedback_upsert.on_conflict_do_update(
+                    index_elements=[WorkoutSessionFeedback.session_id],
+                    set_={"effort": effort, "updated_at": utc_now()},
                 )
             )
-            if feedback is None:
-                session.add(WorkoutSessionFeedback(session_id=workout.id, effort=effort))
-            else:
-                feedback.effort = effort
 
     async def record_effort(
         self, result_id: int, telegram_id: int, effort: str | None

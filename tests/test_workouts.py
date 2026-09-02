@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 
 import pytest
@@ -10,6 +11,7 @@ from app.models import (
     ExerciseOutcome,
     ExerciseResult,
     ExerciseSetResult,
+    WorkoutExercise,
     WorkoutSession,
     WorkoutSessionFeedback,
     WorkoutTemplate,
@@ -646,3 +648,106 @@ async def test_session_feedback_is_one_validated_row(app_services, onboarded_use
         rows = list((await session.scalars(select(WorkoutSessionFeedback))).all())
     assert len(rows) == 1
     assert rows[0].effort == "hard"
+
+
+@pytest.mark.asyncio
+async def test_discomfort_rejects_future_and_stale_callbacks_and_keeps_logged_sets(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    current = await workouts.get_step(workout.id, 10001)
+    assert current is not None
+
+    async with database.session() as session:
+        future_id = await session.scalar(
+            select(ExerciseResult.id)
+            .join(WorkoutExercise)
+            .where(
+                ExerciseResult.session_id == workout.id,
+                ExerciseResult.completed.is_(False),
+                WorkoutExercise.position > current.item.position,
+            )
+            .order_by(WorkoutExercise.position)
+            .limit(1)
+        )
+    assert future_id is not None
+    with pytest.raises(ValueError, match="текущее"):
+        await workouts.stop_for_discomfort(future_id, 10001)
+    still_current = await workouts.get_step(workout.id, 10001)
+    assert still_current is not None
+    assert still_current.result.id == current.result.id
+
+    await workouts.record_set(current.result.id, 10001, reps=12, weight_kg=None)
+    await workouts.stop_for_discomfort(current.result.id, 10001)
+    async with database.session() as session:
+        stored = await session.get(ExerciseResult, current.result.id)
+        set_count = await session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == current.result.id
+            )
+        )
+    assert stored is not None
+    assert stored.completed_sets == 1
+    assert set_count == 1
+
+    completed = await workouts.get_step(workout.id, 10001)
+    assert completed is not None
+    await workouts.complete_exercise(completed.result.id, 10001)
+    await workouts.record_effort(completed.result.id, 10001, "easy")
+    with pytest.raises(ValueError, match="текущее"):
+        await workouts.stop_for_discomfort(completed.result.id, 10001)
+    async with database.session() as session:
+        outcome = await session.scalar(
+            select(ExerciseOutcome).where(
+                ExerciseOutcome.exercise_result_id == completed.result.id
+            )
+        )
+    assert outcome is not None
+    assert (outcome.status, outcome.effort) == ("completed", "easy")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_discomfort_is_idempotent_without_raw_database_errors(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    current = await workouts.get_step(workout.id, 10001)
+    assert current is not None
+
+    results = await asyncio.gather(
+        workouts.stop_for_discomfort(current.result.id, 10001),
+        workouts.stop_for_discomfort(current.result.id, 10001),
+        return_exceptions=True,
+    )
+
+    assert all(result == workout.id or isinstance(result, ValueError) for result in results)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_feedback_upserts_one_row_without_database_errors(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout_id = await complete_workout(workouts, 10001)
+
+    results = await asyncio.gather(
+        workouts.record_session_feedback(workout_id, 10001, "ok"),
+        workouts.record_session_feedback(workout_id, 10001, "hard"),
+        return_exceptions=True,
+    )
+
+    assert results == [None, None]
+    async with database.session() as session:
+        rows = list((await session.scalars(select(WorkoutSessionFeedback))).all())
+    assert len(rows) == 1
+    assert rows[0].effort in {"ok", "hard"}
