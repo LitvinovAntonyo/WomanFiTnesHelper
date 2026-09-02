@@ -124,6 +124,7 @@ def step_keyboard(
     actions = []
     if (
         step.result.completed_sets == 0
+        and not getattr(step, "was_replaced", False)
         and step.exercise.code not in CARDIO_CODES
         and alternative_code_for(step.exercise.code)
     ):
@@ -284,6 +285,8 @@ def plan_text(workout: WorkoutSession) -> str:
             else f"{result.sets_planned if result else item.sets} подхода × "
             f"{repetitions_text(item.exercise.code, item.reps)}"
         )
+        if result is not None and result.reps is not None:
+            dose += f". Цель сегодня: {result.reps} повторений"
         name = "Кардио на выбор" if item.position == 1 else item.exercise.name
         lines.append(f"{item.position}. {name} — {dose}")
     lines.extend(
@@ -309,6 +312,7 @@ def step_caption(step: WorkoutStep) -> str:
     ]
     rest_seconds = rest_seconds_for(step.exercise.code)
     if rest_seconds is not None:
+        lines.append(f"Цель сегодня: {step.result.reps} повторений")
         lines.append(f"Отдых после подхода: {rest_seconds} секунд")
         lines.append(
             f"Запас: {step.reserve_reps} технически чистых повтора"

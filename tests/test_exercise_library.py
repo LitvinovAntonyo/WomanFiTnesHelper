@@ -252,6 +252,20 @@ def test_strength_card_has_log_repeat_skip_replace_and_pain_actions():
     assert any("25 кг × 12" in button.text for row in keyboard.inline_keyboard for button in row)
 
 
+def test_replaced_strength_card_does_not_offer_a_second_replacement():
+    step = make_strength_step(previous_weight=Decimal("25"))
+    step.was_replaced = True
+
+    keyboard = step_keyboard(step, repeat_available=True)
+    callbacks = [
+        button.callback_data
+        for row in keyboard.inline_keyboard
+        for button in row
+    ]
+
+    assert f"exercise:replace:{step.result.id}" not in callbacks
+
+
 def test_repeat_button_supports_a_machine_without_weight_scale():
     step = make_strength_step()
 
@@ -292,6 +306,7 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
     assert "лопаток назад и вниз" in text
     assert "Отдых после подхода: 90 секунд" in caption
     assert "Прошлый рабочий вес: 25 кг" in caption
+    assert "Цель сегодня: 12 повторений" in caption
     assert "Запас: 3–4 технически чистых повтора" in caption
 
     step.minimum_weight_increase_suggested = True

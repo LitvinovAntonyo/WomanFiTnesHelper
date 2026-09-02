@@ -197,6 +197,13 @@ async def test_chest_press_can_be_replaced_with_pec_deck(
     assert replacement is not None
     assert replacement.exercise.code == "pec_deck"
     assert replacement.exercise.name == "Сведение рук в тренажёре"
+    assert replacement.was_replaced is True
+
+    with pytest.raises(ValueError, match="уже заменено"):
+        await workouts.replace_exercise(step.result.id, 10001)
+    replayed = await workouts.get_step(workout.id, 10001)
+    assert replayed is not None
+    assert replayed.exercise.code == "pec_deck"
 
 
 @pytest.mark.asyncio
@@ -541,6 +548,81 @@ async def test_two_easy_repeats_add_only_one_rep_next_time(
 
     assert chest_press_result.reps == 11
     assert chest_press_result.sets_planned == 2
+
+
+@pytest.mark.asyncio
+async def test_latest_pain_breaks_the_two_easy_progression_chain(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    for _ in range(2):
+        workout_id = await complete_workout_with_efforts(
+            workouts, 10001, {"chest_press": "easy"}
+        )
+        async with database.session() as session:
+            chest = await session.scalar(
+                select(ExerciseResult)
+                .join(WorkoutExercise)
+                .where(
+                    ExerciseResult.session_id == workout_id,
+                    WorkoutExercise.exercise.has(code="chest_press"),
+                )
+            )
+            assert chest is not None
+            chest.reps = 12
+    await complete_workout_with_efforts(workouts, 10001, {})
+    await complete_workout_with_efforts(workouts, 10001, {"chest_press": "pain"})
+
+    workout = await workouts.active_or_new(10001)
+    plan = await workouts.get_plan(workout.id, 10001)
+    items = {item.id: item.exercise.code for item in plan.template.items}
+    chest = next(
+        result
+        for result in plan.results
+        if items[result.workout_exercise_id] == "chest_press"
+    )
+
+    assert chest.reps == 12
+    await workouts.begin(workout.id, 10001)
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        if step.exercise.code == "chest_press":
+            assert step.minimum_weight_increase_suggested is False
+            break
+        await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
+    else:
+        pytest.fail("chest_press step was not reached")
+
+
+@pytest.mark.asyncio
+async def test_skipped_occurrence_breaks_easy_chain(app_services, onboarded_user):
+    _, _, _, workouts, _, _ = app_services
+    await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        if step.exercise.code == "chest_press":
+            await workouts.skip_exercise(step.result.id, 10001)
+        else:
+            await workouts.complete_exercise(step.result.id, 10001)
+            if step.exercise.requires_weight:
+                await workouts.record_effort(step.result.id, 10001, "ok")
+    assert await workouts.finish_if_complete(workout.id)
+
+    await complete_workout_with_efforts(workouts, 10001, {})
+    await complete_workout_with_efforts(workouts, 10001, {"chest_press": "easy"})
+    next_workout = await workouts.active_or_new(10001)
+    plan = await workouts.get_plan(next_workout.id, 10001)
+    items = {item.id: item.exercise.code for item in plan.template.items}
+    chest = next(
+        result
+        for result in plan.results
+        if items[result.workout_exercise_id] == "chest_press"
+    )
+
+    assert chest.reps == 10
 
 
 @pytest.mark.asyncio

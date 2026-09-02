@@ -376,6 +376,95 @@ async def test_legacy_rest_callbacks_use_fixed_rest_and_reject_stale_targets(
 
 
 @pytest.mark.asyncio
+async def test_replayed_replace_callback_keeps_first_replacement(
+    app_services, onboarded_user
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    leg_curl = await workouts.get_step(workout.id, 10001)
+    assert leg_curl is not None
+    await workouts.complete_exercise(leg_curl.result.id, 10001)
+    await workouts.record_effort(leg_curl.result.id, 10001, "ok")
+    glute = await workouts.get_step(workout.id, 10001)
+    assert glute is not None
+    assert glute.exercise.code == "glute_kickback"
+
+    callback_data = f"exercise:replace:{glute.result.id}"
+    await dispatcher.feed_update(bot, callback_update(720, callback_data))
+    first = await workouts.get_step(workout.id, 10001)
+    assert first is not None
+    assert first.exercise.code == "hip_abduction"
+    assert first.was_replaced is True
+
+    await dispatcher.feed_update(bot, callback_update(721, callback_data))
+    replayed = await workouts.get_step(workout.id, 10001)
+    assert replayed is not None
+    assert replayed.exercise.code == "hip_abduction"
+    answers = [
+        method for method in session.methods if getattr(method, "callback_query_id", None)
+    ]
+    assert any("уже заменено" in (getattr(method, "text", "") or "") for method in answers)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_adapted_target_is_visible_in_telegram_plan_after_two_easy_results(
+    app_services, onboarded_user
+):
+    settings, database, users, workouts, progress, _ = app_services
+
+    async def complete_with_chest_effort(effort: str) -> None:
+        workout = await workouts.active_or_new(10001)
+        await workouts.begin(workout.id, 10001)
+        while (step := await workouts.get_step(workout.id, 10001)) is not None:
+            await workouts.complete_exercise(step.result.id, 10001)
+            if step.exercise.requires_weight:
+                await workouts.record_effort(
+                    step.result.id,
+                    10001,
+                    effort if step.exercise.code == "chest_press" else "ok",
+                )
+        assert await workouts.finish_if_complete(workout.id)
+
+    await complete_with_chest_effort("easy")
+    await complete_with_chest_effort("easy")
+    await complete_with_chest_effort("ok")
+
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    await dispatcher.feed_update(bot, user_message(730, "🏋️ Начать тренировку"))
+    workout = await workouts.active_or_new(10001)
+    await dispatcher.feed_update(
+        bot,
+        callback_update(731, f"cardio:select:{workout.id}:cardio_treadmill"),
+    )
+
+    texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("Жим в тренажёре" in text and "Цель сегодня: 11 повторений" in text for text in texts)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
 async def test_pain_advances_and_completed_session_collects_feedback(
     app_services, onboarded_user, monkeypatch
 ):

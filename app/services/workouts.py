@@ -45,6 +45,7 @@ class WorkoutStep:
     reserve_reps: str
     minimum_weight_increase_suggested: bool
     awaiting_effort: bool
+    was_replaced: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,29 +414,44 @@ class WorkoutService:
         history = list(
             (
                 await session.execute(  # type: ignore[attr-defined]
-                    select(ExerciseOutcome.effort, ExerciseResult.reps)
-                    .join(ExerciseResult)
+                    select(
+                        ExerciseOutcome.status,
+                        ExerciseOutcome.effort,
+                        ExerciseResult.reps,
+                    )
+                    .select_from(ExerciseResult)
                     .join(WorkoutSession)
-                    .join(WorkoutExercise, ExerciseResult.workout_exercise_id == WorkoutExercise.id)
+                    .join(
+                        WorkoutExercise,
+                        ExerciseResult.workout_exercise_id == WorkoutExercise.id,
+                    )
+                    .outerjoin(
+                        ExerciseOutcome,
+                        ExerciseOutcome.exercise_result_id == ExerciseResult.id,
+                    )
                     .where(
                         WorkoutSession.user_id == user_id,
                         WorkoutSession.status == "completed",
                         WorkoutExercise.exercise_id == item.exercise_id,
-                        ExerciseOutcome.status == "completed",
                     )
-                    .order_by(ExerciseOutcome.updated_at.desc())
+                    .order_by(
+                        WorkoutSession.completed_at.desc(),
+                        ExerciseResult.id.desc(),
+                    )
                     .limit(8)
                 )
             ).all()
         )
-        evaluated = [(effort, reps) for effort, reps in history if effort is not None]
-        latest_reps = int(evaluated[0][1] or lower) if evaluated else lower
+        latest_reps = int(history[0][2] or lower) if history else lower
         latest_reps = min(item.reps, max(lower, latest_reps))
-        if len(evaluated) >= 2 and [row[0] for row in evaluated[:2]] == ["easy", "easy"]:
+        if len(history) >= 2 and [row[:2] for row in history[:2]] == [
+            ("completed", "easy"),
+            ("completed", "easy"),
+        ]:
             if latest_reps < item.reps:
                 return latest_reps + 1, False
             return item.reps, True
-        if evaluated and evaluated[0][0] == "hard":
+        if history and history[0][:2] == ("completed", "hard"):
             return max(lower, latest_reps - 1), False
         return latest_reps, False
 
@@ -669,6 +685,10 @@ class WorkoutService:
                     and result.outcome.status == "completed"
                     and result.outcome.effort is None
                 ),
+                was_replaced=(
+                    result.outcome is not None
+                    and result.outcome.effective_exercise_id is not None
+                ),
             )
 
     async def replace_exercise(self, result_id: int, telegram_id: int) -> int:
@@ -678,6 +698,8 @@ class WorkoutService:
             )
             if result.completed_sets:
                 raise ValueError("Замену можно выбрать до первого подхода")
+            if result.outcome and result.outcome.effective_exercise_id is not None:
+                raise ValueError("Упражнение уже заменено")
             claimed = await session.execute(
                 update(ExerciseResult)
                 .where(
