@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -503,15 +504,13 @@ def build_candidate_cards(
     existing_sources = manifest.get("sources")
     if not isinstance(existing_sources, dict):
         raise ValueError("exercise asset manifest sources must be an object")
-    owned_source_ids = {
-        _source_id(_relative_source(pair, filename))
-        for pair in SOURCE_PAIRS
-        for filename in (pair.start_file, pair.end_file)
-    }
     source_records: dict[str, object] = {
         source_id: record
         for source_id, record in existing_sources.items()
-        if source_id not in owned_source_ids
+        if not (
+            source_id.startswith(f"{SOURCE_PROVIDER}:")
+            or (isinstance(record, dict) and record.get("provider") == SOURCE_PROVIDER)
+        )
     }
 
     for pair in SOURCE_PAIRS:
@@ -668,14 +667,32 @@ def _validate_source_record(
     return local_path, source_url
 
 
+def _validate_exercise_code(code: str) -> None:
+    if re.fullmatch(r"[a-z][a-z0-9_]*", code) is None:
+        raise ValueError(f"exercise code is unsafe: {code!r}")
+
+
+def _safe_card_path(asset_dir: Path, card_name: object, code: str) -> Path:
+    if not isinstance(card_name, str) or card_name != f"{code}.png":
+        raise ValueError(f"exercise card path is invalid: {code}")
+    root = asset_dir.resolve()
+    card = (asset_dir / card_name).resolve()
+    try:
+        relative = card.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"exercise card points outside asset directory: {code}") from exc
+    if not relative.parts:
+        raise ValueError(f"exercise card path is invalid: {code}")
+    return card
+
+
 def _validate_card(code: str, exercise: dict[str, object], asset_dir: Path) -> None:
     card_name = exercise.get("card")
     checksum = exercise.get("sha256")
-    if card_name != f"{code}.png":
-        raise ValueError(f"exercise card path is invalid: {code}")
+    card = _safe_card_path(asset_dir, card_name, code)
     if not isinstance(checksum, str) or len(checksum) != 64:
         raise ValueError(f"exercise card checksum is invalid: {code}")
-    if _sha256(asset_dir / card_name) != checksum.lower():
+    if _sha256(card) != checksum.lower():
         raise ValueError(f"exercise card checksum mismatch: {code}")
 
 
@@ -751,6 +768,7 @@ def validate_sources(
     for code, raw_exercise in exercises.items():
         if not isinstance(code, str) or not code or not isinstance(raw_exercise, dict):
             raise ValueError("exercise manifest entry is malformed")
+        _validate_exercise_code(code)
         status = raw_exercise.get("status")
         source_ids = raw_exercise.get("source_ids")
         if status == "text_only":
@@ -807,13 +825,7 @@ def require_all_approved(
     for code, raw_exercise in exercises.items():
         if not isinstance(raw_exercise, dict) or raw_exercise.get("status") != "approved":
             raise ValueError(f"exercise card is not approved: {code}")
-        card_name = raw_exercise.get("card")
-        checksum = raw_exercise.get("sha256")
-        if not isinstance(card_name, str) or not isinstance(checksum, str):
-            raise ValueError(f"approved exercise card metadata is incomplete: {code}")
-        card = asset_dir / card_name
-        if _sha256(card) != checksum:
-            raise ValueError(f"approved exercise card checksum mismatch: {code}")
+        _validate_card(code, raw_exercise, asset_dir)
 
 
 def _parser() -> argparse.ArgumentParser:

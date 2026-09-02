@@ -396,6 +396,13 @@ def test_base_rebuild_preserves_and_validates_a_second_provider_glute_pair(tmp_p
     license_record, source_records = second_provider_glute_records(start, end)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_ids = list(source_records)
+    stale_source_id = (
+        "free-exercise-db:0000000000000000000000000000000000000000:"
+        "exercises/Walking_Treadmill/0.jpg"
+    )
+    stale_source = deepcopy(next(iter(manifest["sources"].values())))
+    stale_source["repository_revision"] = "0" * 40
+    manifest["sources"][stale_source_id] = stale_source
     manifest["licenses"]["synthetic-commons"] = license_record
     manifest["sources"].update(source_records)
     manifest["exercises"]["glute_kickback"] = {
@@ -418,6 +425,7 @@ def test_base_rebuild_preserves_and_validates_a_second_provider_glute_pair(tmp_p
     assert main(["--status", "candidate", *common_args]) == 0
 
     rebuilt = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert stale_source_id not in rebuilt["sources"]
     assert rebuilt["licenses"]["synthetic-commons"] == license_record
     assert {source_id: rebuilt["sources"][source_id] for source_id in source_ids} == (
         source_records
@@ -510,3 +518,50 @@ def test_validate_sources_rejects_unreferenced_duplicate_and_malformed_records(
             encoding="utf-8",
         )
         assert main(["--validate-sources", *common_args]) == 1
+
+
+def test_validation_rejects_unsafe_exercise_codes_and_card_paths_without_hashing_outside(
+    tmp_path, monkeypatch
+):
+    from scripts import build_exercise_cards as card_builder
+
+    manifest_path, asset_dir, media_root, common_args = batch_paths(tmp_path)
+    assert card_builder.main(["--status", "candidate", *common_args]) == 0
+    start, end, _ = add_glute_card(asset_dir, media_root)
+    license_record, source_records = second_provider_glute_records(start, end)
+    base = json.loads(manifest_path.read_text(encoding="utf-8"))
+    outside = tmp_path / "outside.png"
+    Image.new("RGB", (32, 32), "purple").save(outside, format="PNG")
+    outside_checksum = hashlib.sha256(outside.read_bytes()).hexdigest()
+    symlink_card = asset_dir / "extra_symlink.png"
+    symlink_card.symlink_to(outside)
+    original_sha256 = card_builder._sha256
+
+    def reject_outside_hash(path: Path) -> str:
+        if path.resolve() == outside.resolve():
+            raise AssertionError("validator attempted to hash a file outside asset_dir")
+        return original_sha256(path)
+
+    monkeypatch.setattr(card_builder, "_sha256", reject_outside_hash)
+    scenarios = (
+        ("../outside", "../outside.png"),
+        ("extra_relative", "../outside.png"),
+        ("extra_absolute", str(outside.resolve())),
+        ("extra_symlink", symlink_card.name),
+    )
+    for code, card_name in scenarios:
+        manifest = deepcopy(base)
+        manifest["licenses"]["synthetic-commons"] = license_record
+        manifest["sources"].update(source_records)
+        manifest["exercises"][code] = {
+            "card": card_name,
+            "status": "approved",
+            "sha256": outside_checksum,
+            "source_ids": list(source_records),
+        }
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        assert card_builder.main(["--validate-sources", *common_args]) == 1
