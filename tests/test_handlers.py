@@ -18,7 +18,7 @@ from app.context import AppContext
 from app.handlers import build_routers
 from app.handlers import workout as workout_module
 from app.llm import build_llm_service
-from app.models import ExerciseSetResult, WorkoutSessionFeedback
+from app.models import ExerciseSetResult, Reminder, WorkoutSessionFeedback
 from app.services.scheduler import ReminderService
 
 
@@ -438,6 +438,87 @@ async def test_skip_replace_and_pain_clear_pending_set_input(
                 ExerciseSetResult.exercise_result_id.in_(
                     (skipped.result.id, replaced.result.id)
                 )
+            )
+        )
+    assert set_count == 0
+
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_start_menu_and_reminder_accept_clear_pending_set_input(
+    app_services, onboarded_user
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await dispatcher.feed_update(
+        bot, callback_update(600, f"exercise:set:{cardio.result.id}")
+    )
+    strength = await workouts.get_step(workout.id, 10001)
+    assert strength is not None
+
+    await dispatcher.feed_update(
+        bot, callback_update(601, f"exercise:log:{strength.result.id}")
+    )
+    assert (
+        await dispatcher.storage.get_state(workout_storage_key(bot))
+        == "WorkoutInput:set_result"
+    )
+    await dispatcher.feed_update(bot, user_message(602, "🏋️ Начать тренировку"))
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    assert (await workouts.active_or_new(10001)).id == workout.id
+    await dispatcher.feed_update(bot, user_message(603, "25 12"))
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    async with database.session() as database_session:
+        reminder = Reminder(
+            user_id=onboarded_user.id,
+            workout_at=now,
+            scheduled_at=now,
+            kind="pre90",
+        )
+        database_session.add(reminder)
+        await database_session.flush()
+        reminder_id = reminder.id
+
+    await dispatcher.feed_update(
+        bot, callback_update(604, f"exercise:log:{strength.result.id}")
+    )
+    assert (
+        await dispatcher.storage.get_state(workout_storage_key(bot))
+        == "WorkoutInput:set_result"
+    )
+    await dispatcher.feed_update(
+        bot, callback_update(605, f"reminder:yes:{reminder_id}")
+    )
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    await dispatcher.feed_update(bot, user_message(606, "25 12"))
+
+    async with database.session() as database_session:
+        set_count = await database_session.scalar(
+            select(func.count()).select_from(ExerciseSetResult).where(
+                ExerciseSetResult.exercise_result_id == strength.result.id
             )
         )
     assert set_count == 0

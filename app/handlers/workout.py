@@ -430,8 +430,9 @@ def build_workout_router(context: AppContext) -> Router:
         )
 
     @router.message(F.text == "🏋️ Начать тренировку")
-    async def start_from_menu(message: Message) -> None:
+    async def start_from_menu(message: Message, state: FSMContext) -> None:
         assert message.from_user is not None
+        await clear_pending_set_input(state)
         workout = await context.workouts.active_or_new(message.from_user.id)
         if workout.started_at:
             await message.answer("Продолжаем с того места, где остановились.")
@@ -461,7 +462,8 @@ def build_workout_router(context: AppContext) -> Router:
             )
 
     @router.callback_query(F.data.startswith("reminder:yes:"))
-    async def accept_reminder(callback: CallbackQuery) -> None:
+    async def accept_reminder(callback: CallbackQuery, state: FSMContext) -> None:
+        await clear_pending_set_input(state)
         reminder_id = int((callback.data or "").rsplit(":", 1)[1])
         workout = await context.workouts.confirm_from_reminder(
             reminder_id, callback.from_user.id
