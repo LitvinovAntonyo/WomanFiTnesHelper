@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "licenses": {},
+  "sources": {},
+  "exercises": {
+    "cardio_treadmill": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "cardio_elliptical": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "cardio_bike": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "seated_leg_curl": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "glute_kickback": {"card": null, "status": "text_only", "sha256": null, "source_ids": []},
+    "hip_abduction": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "lat_pulldown": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "chest_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "hack_squat": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "leg_extension": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "hip_adduction": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "seated_row": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "leg_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "machine_shoulder_press": {"card": null, "status": "candidate", "sha256": null, "source_ids": []},
+    "pec_deck": {"card": null, "status": "candidate", "sha256": null, "source_ids": []}
+  }
+}

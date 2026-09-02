@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,8 +13,6 @@ class ExerciseGuidance:
     cues: str
     mistakes: str
 
-
-EXERCISE_ASSET_DIR = Path(__file__).resolve().parent / "assets" / "exercises"
 
 CARDIO_CODES = ("cardio_treadmill", "cardio_elliptical", "cardio_bike")
 CARDIO_LABELS = {
@@ -265,10 +262,6 @@ EXERCISE_GUIDANCE: dict[str, ExerciseGuidance] = {
 
 def guidance_for(code: str) -> ExerciseGuidance:
     return EXERCISE_GUIDANCE[code]
-
-
-def image_path_for(code: str) -> Path:
-    return EXERCISE_ASSET_DIR / guidance_for(code).image_filename
 
 
 def alternative_code_for(code: str) -> str | None:

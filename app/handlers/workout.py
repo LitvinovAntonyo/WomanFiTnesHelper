@@ -18,12 +18,12 @@ from aiogram.types import (
 )
 
 from app.context import AppContext
+from app.exercise_assets import card_path_for
 from app.exercise_library import (
     CARDIO_CODES,
     CARDIO_LABELS,
     alternative_code_for,
     guidance_for,
-    image_path_for,
     repetitions_text,
     rest_seconds_for,
 )
@@ -393,8 +393,8 @@ def build_workout_router(context: AppContext) -> Router:
                     reply_markup=session_feedback_keyboard(session_id),
                 )
             return
-        image_path = image_path_for(step.exercise.code)
-        if image_path.is_file():
+        image_path = card_path_for(step.exercise.code)
+        if image_path is not None:
             cached_file_id = await context.workouts.media_file_id(step.exercise.code)
             try:
                 sent = await message.answer_photo(

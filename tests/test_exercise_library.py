@@ -9,7 +9,6 @@ from app.exercise_library import (
     CARDIO_CODES,
     EXERCISE_ALTERNATIVES,
     EXERCISE_GUIDANCE,
-    image_path_for,
     repetitions_text,
     rest_seconds_for,
 )
@@ -40,13 +39,11 @@ def test_machine_replacements_have_local_guidance():
     assert EXERCISE_ALTERNATIVES["leg_press"] == "hack_squat"
     assert EXERCISE_ALTERNATIVES["hack_squat"] == "leg_press"
     assert "goblet_squat" not in EXERCISE_ALTERNATIVES
-    assert EXERCISE_GUIDANCE["hack_squat"].image_filename == "hack_squat.png"
-    assert image_path_for("hack_squat").is_file()
+    assert EXERCISE_GUIDANCE["hack_squat"].setup
     assert EXERCISE_ALTERNATIVES["chest_press"] == "pec_deck"
     assert EXERCISE_ALTERNATIVES["pec_deck"] == "chest_press"
     assert "dumbbell_press" not in EXERCISE_ALTERNATIVES
-    assert EXERCISE_GUIDANCE["pec_deck"].image_filename == "pec_deck.png"
-    assert image_path_for("pec_deck").is_file()
+    assert EXERCISE_GUIDANCE["pec_deck"].setup
 
 
 def test_templates_are_full_body_v4_with_lower_body_priority():
