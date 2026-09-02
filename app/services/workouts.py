@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import aliased, joinedload, selectinload
 
 from app.database import Database
 from app.exercise_library import (
@@ -404,13 +404,19 @@ class WorkoutService:
             return workout
 
     async def _progression_state(
-        self, session: object, user_id: int, item: WorkoutExercise
+        self,
+        session: object,
+        user_id: int,
+        item: WorkoutExercise,
+        *,
+        effective_exercise_id: int | None = None,
     ) -> tuple[int | None, bool]:
         """Apply a deliberately small, explainable adjustment to the next session."""
         if item.reps is None:
             return None, False
         width = REP_RANGE_WIDTH.get(item.exercise.code, 0)
         lower = max(1, item.reps - width)
+        history_exercise_id = effective_exercise_id or item.exercise_id
         history = list(
             (
                 await session.execute(  # type: ignore[attr-defined]
@@ -432,7 +438,11 @@ class WorkoutService:
                     .where(
                         WorkoutSession.user_id == user_id,
                         WorkoutSession.status == "completed",
-                        WorkoutExercise.exercise_id == item.exercise_id,
+                        func.coalesce(
+                            ExerciseOutcome.effective_exercise_id,
+                            WorkoutExercise.exercise_id,
+                        )
+                        == history_exercise_id,
                     )
                     .order_by(
                         WorkoutSession.completed_at.desc(),
@@ -668,7 +678,10 @@ class WorkoutService:
             )
             completed_count = await self._completed_v4_count(session, workout.user_id)
             _, increase_weight = await self._progression_state(
-                session, workout.user_id, item
+                session,
+                workout.user_id,
+                item,
+                effective_exercise_id=exercise.id,
             )
             return WorkoutStep(
                 session=workout,
@@ -700,24 +713,8 @@ class WorkoutService:
                 raise ValueError("Замену можно выбрать до первого подхода")
             if result.outcome and result.outcome.effective_exercise_id is not None:
                 raise ValueError("Упражнение уже заменено")
-            claimed = await session.execute(
-                update(ExerciseResult)
-                .where(
-                    ExerciseResult.id == result.id,
-                    ExerciseResult.completed.is_(False),
-                    ExerciseResult.completed_sets == 0,
-                )
-                .values(updated_at=utc_now())
-            )
-            if claimed.rowcount != 1:
-                raise ValueError("Действие доступно только для текущего упражнения")
             item = result.workout_exercise
-            current = (
-                result.outcome.effective_exercise
-                if result.outcome and result.outcome.effective_exercise
-                else item.exercise
-            )
-            alternative_code = alternative_code_for(current.code)
+            alternative_code = alternative_code_for(item.exercise.code)
             if alternative_code is None:
                 raise ValueError("Для этого шага нет готовой безопасной замены")
             alternative = await session.scalar(
@@ -725,15 +722,69 @@ class WorkoutService:
             )
             if alternative is None:
                 raise ValueError("Замена пока недоступна")
-            outcome = result.outcome
-            if outcome is None:
-                outcome = ExerciseOutcome(exercise_result_id=result.id)
-                session.add(outcome)
-                result.outcome = outcome
-            outcome.effective_exercise = alternative
-            outcome.status = "pending"
-            outcome.effort = None
-            await session.flush()
+
+            pending_outcome = sqlite_insert(ExerciseOutcome).values(
+                exercise_result_id=result.id,
+                status="pending",
+                effort=None,
+            )
+            await session.execute(
+                pending_outcome.on_conflict_do_nothing(
+                    index_elements=[ExerciseOutcome.exercise_result_id]
+                )
+            )
+
+            frontier_result = aliased(ExerciseResult)
+            frontier_item = aliased(WorkoutExercise)
+            current_result_id = (
+                select(frontier_result.id)
+                .join(
+                    frontier_item,
+                    frontier_result.workout_exercise_id == frontier_item.id,
+                )
+                .where(
+                    frontier_result.session_id == result.session_id,
+                    frontier_result.completed.is_(False),
+                )
+                .order_by(frontier_item.position)
+                .limit(1)
+                .scalar_subquery()
+            )
+            eligible_result_ids = (
+                select(ExerciseResult.id)
+                .join(WorkoutSession)
+                .join(User)
+                .where(
+                    ExerciseResult.id == result.id,
+                    User.telegram_id == telegram_id,
+                    WorkoutSession.status == "active",
+                    ExerciseResult.completed.is_(False),
+                    ExerciseResult.completed_sets == 0,
+                    ExerciseResult.id == current_result_id,
+                )
+            )
+            claimed = await session.execute(
+                update(ExerciseOutcome)
+                .where(
+                    ExerciseOutcome.exercise_result_id.in_(eligible_result_ids),
+                    ExerciseOutcome.effective_exercise_id.is_(None),
+                )
+                .values(
+                    effective_exercise_id=alternative.id,
+                    status="pending",
+                    effort=None,
+                    updated_at=utc_now(),
+                )
+            )
+            if claimed.rowcount != 1:
+                raise ValueError("Упражнение уже заменено или шаг больше не актуален")
+            adapted_reps, _ = await self._progression_state(
+                session,
+                result.session.user_id,
+                item,
+                effective_exercise_id=alternative.id,
+            )
+            result.reps = adapted_reps
             return result.session_id
 
     async def skip_exercise(self, result_id: int, telegram_id: int) -> int:

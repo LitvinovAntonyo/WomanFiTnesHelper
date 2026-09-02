@@ -207,6 +207,49 @@ async def test_chest_press_can_be_replaced_with_pec_deck(
 
 
 @pytest.mark.asyncio
+async def test_concurrent_replacement_callbacks_have_one_domain_safe_winner(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    await complete_workout(workouts, 10001)
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    while True:
+        step = await workouts.get_step(workout.id, 10001)
+        assert step is not None
+        if step.exercise.code == "chest_press":
+            break
+        await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
+
+    outcomes = await asyncio.gather(
+        workouts.replace_exercise(step.result.id, 10001),
+        workouts.replace_exercise(step.result.id, 10001),
+        return_exceptions=True,
+    )
+
+    assert sum(value == workout.id for value in outcomes) == 1
+    assert sum(isinstance(value, ValueError) for value in outcomes) == 1, outcomes
+    assert all(isinstance(value, (int, ValueError)) for value in outcomes)
+    current = await workouts.get_step(workout.id, 10001)
+    assert current is not None
+    assert current.exercise.code == "pec_deck"
+    async with database.session() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(ExerciseOutcome).where(
+                        ExerciseOutcome.exercise_result_id == step.result.id
+                    )
+                )
+            ).all()
+        )
+    assert len(rows) == 1
+    assert rows[0].effective_exercise_id == current.exercise.id
+
+
+@pytest.mark.asyncio
 async def test_strength_sets_are_persisted_one_by_one(app_services, onboarded_user):
     _, _, _, workouts, _, _ = app_services
     workout = await workouts.active_or_new(10001)
@@ -623,6 +666,59 @@ async def test_skipped_occurrence_breaks_easy_chain(app_services, onboarded_user
     )
 
     assert chest.reps == 10
+
+
+@pytest.mark.asyncio
+async def test_replaced_pec_deck_history_does_not_progress_unreplaced_chest_press(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+
+    for _ in range(2):
+        workout = await workouts.active_or_new(10001)
+        await workouts.begin(workout.id, 10001)
+        while (step := await workouts.get_step(workout.id, 10001)) is not None:
+            if step.exercise.code == "chest_press":
+                await workouts.replace_exercise(step.result.id, 10001)
+                step = await workouts.get_step(workout.id, 10001)
+                assert step is not None
+                assert step.exercise.code == "pec_deck"
+            await workouts.complete_exercise(step.result.id, 10001)
+            if step.exercise.requires_weight:
+                await workouts.record_effort(
+                    step.result.id,
+                    10001,
+                    "easy" if step.exercise.code == "pec_deck" else "ok",
+                )
+        assert await workouts.finish_if_complete(workout.id)
+
+    await complete_workout(workouts, 10001)
+    workout = await workouts.active_or_new(10001)
+    plan = await workouts.get_plan(workout.id, 10001)
+    items = {item.id: item.exercise.code for item in plan.template.items}
+    chest = next(
+        result
+        for result in plan.results
+        if items[result.workout_exercise_id] == "chest_press"
+    )
+    assert chest.reps == 10
+
+    await workouts.begin(workout.id, 10001)
+    while (step := await workouts.get_step(workout.id, 10001)) is not None:
+        if step.exercise.code == "chest_press":
+            assert step.minimum_weight_increase_suggested is False
+            await workouts.replace_exercise(step.result.id, 10001)
+            replaced = await workouts.get_step(workout.id, 10001)
+            assert replaced is not None
+            assert replaced.exercise.code == "pec_deck"
+            assert replaced.result.reps == 11
+            assert replaced.minimum_weight_increase_suggested is False
+            break
+        await workouts.complete_exercise(step.result.id, 10001)
+        if step.exercise.requires_weight:
+            await workouts.record_effort(step.result.id, 10001, "ok")
+    else:
+        pytest.fail("chest_press step was not reached")
 
 
 @pytest.mark.asyncio
