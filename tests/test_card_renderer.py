@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 FONT_SHA256 = "bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d"
@@ -127,19 +127,26 @@ def test_render_card_rejects_a_hint_that_needs_more_than_two_lines(tmp_path):
 
 
 def test_render_contact_sheet_is_deterministic_and_uses_three_columns(tmp_path):
-    from scripts.build_exercise_contact_sheet import render_contact_sheet
+    from scripts.build_exercise_contact_sheet import ContactSheetItem, render_contact_sheet
 
-    cards = [
-        solid_image(tmp_path / "alpha.png", (1254, 1254), "red"),
-        solid_image(tmp_path / "beta.png", (1254, 1254), "green"),
-        solid_image(tmp_path / "gamma.png", (1254, 1254), "blue"),
-        solid_image(tmp_path / "delta.png", (1254, 1254), "yellow"),
+    items = [
+        ContactSheetItem(
+            code=code,
+            card=solid_image(tmp_path / filename, (1254, 1254), color),
+            status="candidate",
+        )
+        for code, filename, color in (
+            ("alpha", "first.png", "red"),
+            ("beta", "second.png", "green"),
+            ("gamma", "third.png", "blue"),
+            ("delta", "fourth.png", "yellow"),
+        )
     ]
     first = tmp_path / "sheet-1.png"
     second = tmp_path / "sheet-2.png"
 
-    render_contact_sheet(cards, first)
-    render_contact_sheet(cards, second)
+    render_contact_sheet(items, first)
+    render_contact_sheet(items, second)
 
     assert sha256(first) == sha256(second)
     with Image.open(first) as sheet:
@@ -158,12 +165,60 @@ def test_render_contact_sheet_is_deterministic_and_uses_three_columns(tmp_path):
     assert samples[3][0] > 200 and samples[3][1] > 200
 
 
-def test_candidate_card_discovery_reads_manifest_once_each(tmp_path):
-    from scripts.build_exercise_contact_sheet import candidate_cards_from_manifest
+def test_render_contact_sheet_empty_state_is_readable_and_deterministic(tmp_path):
+    from scripts.build_exercise_contact_sheet import render_contact_sheet
+
+    first = tmp_path / "empty-1.png"
+    second = tmp_path / "empty-2.png"
+
+    render_contact_sheet([], first)
+    render_contact_sheet([], second)
+
+    assert sha256(first) == sha256(second)
+    with Image.open(first) as sheet:
+        assert sheet.size == (1128, 432)
+        background = sheet.getpixel((0, 0))
+        center_band = sheet.crop((300, 180, 828, 250))
+        blank = Image.new("RGB", center_band.size, background)
+        assert ImageChops.difference(center_band, blank).getbbox() is not None
+
+
+def test_render_contact_sheet_one_card_draws_manifest_code_and_status(
+    tmp_path, monkeypatch
+):
+    from scripts.build_exercise_contact_sheet import ContactSheetItem, render_contact_sheet
+
+    card = solid_image(tmp_path / "row.png", (1254, 1254), "red")
+    item = ContactSheetItem(code="seated_row", card=card, status="candidate")
+    drawn_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def recording_text(draw, xy, text, *args, **kwargs):
+        drawn_text.append(text)
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", recording_text)
+    output = tmp_path / "one.png"
+
+    render_contact_sheet([item], output)
+
+    assert drawn_text == ["seated_row", "status: candidate"]
+    assert "row" not in drawn_text
+    with Image.open(output) as sheet:
+        assert sheet.size == (1128, 432)
+        assert sheet.getpixel((204, 186))[0] > 200
+        assert sheet.getpixel((564, 186)) == sheet.getpixel((0, 0))
+
+
+def test_candidate_item_discovery_preserves_manifest_code_when_filename_differs(tmp_path):
+    from scripts.build_exercise_contact_sheet import (
+        ContactSheetItem,
+        candidate_items_from_manifest,
+    )
 
     asset_dir = tmp_path / "assets"
     asset_dir.mkdir()
-    for name in ("alpha.png", "beta.png", "approved.png"):
+    for name in ("row.png", "approved.png"):
         solid_image(asset_dir / name, (20, 20), "white")
     manifest = tmp_path / "manifest.json"
     manifest.write_text(
@@ -171,10 +226,8 @@ def test_candidate_card_discovery_reads_manifest_once_each(tmp_path):
             {
                 "schema_version": 1,
                 "exercises": {
-                    "beta": {"card": "beta.png", "status": "candidate"},
-                    "alpha": {"card": "alpha.png", "status": "candidate"},
+                    "seated_row": {"card": "row.png", "status": "candidate"},
                     "approved": {"card": "approved.png", "status": "approved"},
-                    "duplicate": {"card": "alpha.png", "status": "candidate"},
                     "text": {"card": None, "status": "text_only"},
                 },
             }
@@ -182,6 +235,12 @@ def test_candidate_card_discovery_reads_manifest_once_each(tmp_path):
         encoding="utf-8",
     )
 
-    cards = candidate_cards_from_manifest(manifest, asset_dir)
+    items = candidate_items_from_manifest(manifest, asset_dir)
 
-    assert cards == [asset_dir / "alpha.png", asset_dir / "beta.png"]
+    assert items == [
+        ContactSheetItem(
+            code="seated_row",
+            card=asset_dir / "row.png",
+            status="candidate",
+        )
+    ]
