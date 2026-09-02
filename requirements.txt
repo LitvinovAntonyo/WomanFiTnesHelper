@@ -1,0 +1,7 @@
+aiogram==3.31.0
+SQLAlchemy==2.0.52
+aiosqlite==0.22.1
+APScheduler==3.11.3
+pydantic-settings==2.15.0
+httpx==0.28.1
+tzdata==2026.3

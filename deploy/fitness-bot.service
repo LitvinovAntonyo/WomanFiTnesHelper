@@ -1,0 +1,46 @@
+[Unit]
+Description=Personal Fitness Motivator Telegram Bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=fitnessbot
+Group=fitnessbot
+WorkingDirectory=/opt/fitness-bot
+EnvironmentFile=/etc/fitness-bot/fitness-bot.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/fitness-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Keep this optional bot from competing with the existing parsers on a small VPS.
+Nice=5
+CPUQuota=50%
+CPUWeight=20
+MemoryHigh=192M
+MemoryMax=256M
+TasksMax=64
+IOWeight=25
+OOMPolicy=stop
+
+StateDirectory=fitness-bot
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/fitness-bot
+
+[Install]
+WantedBy=multi-user.target

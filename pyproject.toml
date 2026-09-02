@@ -1,0 +1,17 @@
+[project]
+name = "personal-fitness-bot"
+version = "1.0.0"
+requires-python = ">=3.10,<3.15"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
