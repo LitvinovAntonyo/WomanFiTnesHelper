@@ -128,11 +128,14 @@ class FakeBot:
 
 
 @pytest.mark.asyncio
-async def test_due_reminder_is_delivered_once(app_services, onboarded_user):
+async def test_due_reminder_is_delivered_once(
+    app_services, onboarded_user, monkeypatch
+):
     settings, database, _, _, _, _ = app_services
     fake_bot = FakeBot()
     service = ReminderService(database, settings, fake_bot)  # type: ignore[arg-type]
-    now = utc_now().replace(hour=12)
+    now = datetime(2026, 9, 7, 12, 0)
+    monkeypatch.setattr("app.services.scheduler.utc_now", lambda: now)
     async with database.session() as session:
         session.add(
             Reminder(
@@ -142,7 +145,6 @@ async def test_due_reminder_is_delivered_once(app_services, onboarded_user):
                 kind="pre90",
             )
         )
-    # The production tick uses the real current time; direct delivery keeps this test time-zone stable.
     async with database.session() as session:
         reminder_id = await session.scalar(
             select(Reminder.id).where(Reminder.user_id == onboarded_user.id)
