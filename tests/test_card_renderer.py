@@ -126,6 +126,36 @@ def test_render_card_rejects_a_hint_that_needs_more_than_two_lines(tmp_path):
         render_card(spec, tmp_path / "overflow.png")
 
 
+def test_hack_squat_card_renders_lowered_end_phase_with_matching_hint(
+    tmp_path, monkeypatch
+):
+    from scripts.build_exercise_cards import SOURCE_PAIRS, card_spec_for, render_card
+
+    pair = next(item for item in SOURCE_PAIRS if item.code == "hack_squat")
+    source_dir = tmp_path / "hack_squat"
+    source_dir.mkdir()
+    solid_image(source_dir / "start.jpg", (220, 180), "red")
+    solid_image(source_dir / "end.jpg", (220, 180), "blue")
+    spec = card_spec_for(pair, source_dir)
+    drawn_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def recording_text(draw, xy, text, *args, **kwargs):
+        drawn_text.append(text)
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", recording_text)
+    render_card(spec, tmp_path / "hack_squat.png")
+
+    assert (pair.start_file, pair.end_file) == ("0.jpg", "1.jpg")
+    assert spec.start_label == "Исходное положение"
+    assert spec.end_label == "Конечное положение"
+    assert spec.end_hint == "Опустись до комфортной глубины под контролем"
+    end_label_index = drawn_text.index(spec.end_label)
+    assert " ".join(drawn_text[end_label_index + 1 : -1]) == spec.end_hint
+    assert not any("Поднимись" in text for text in drawn_text)
+
+
 def test_render_contact_sheet_is_deterministic_and_uses_three_columns(tmp_path):
     from scripts.build_exercise_contact_sheet import ContactSheetItem, render_contact_sheet
 

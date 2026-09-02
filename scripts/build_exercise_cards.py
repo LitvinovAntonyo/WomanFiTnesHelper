@@ -7,7 +7,8 @@ import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import date
+from pathlib import Path, PurePosixPath
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -22,6 +23,9 @@ SOURCE_PROVIDER = "free-exercise-db"
 SOURCE_REPOSITORY_URL = "https://github.com/yuhonas/free-exercise-db.git"
 SOURCE_WEB_URL = "https://github.com/yuhonas/free-exercise-db"
 PINNED_SOURCE_REVISION = "a859101d633a01c4a1a920d6a8ce41dabba0705f"
+SOURCE_VERIFIED_AT = "2026-09-02"
+LICENSE_BLOCK_START = "<!-- BEGIN managed free-exercise-db license -->"
+LICENSE_BLOCK_END = "<!-- END managed free-exercise-db license -->"
 
 CANVAS_SIZE = (1254, 1254)
 BACKGROUND = "#F4F6F6"
@@ -122,7 +126,7 @@ SOURCE_PAIRS = (
         "1.jpg",
         "Гакк-приседания",
         "Спина и таз прижаты к опоре",
-        "Поднимись, не блокируя колени",
+        "Опустись до комфортной глубины под контролем",
     ),
     SourcePair(
         "leg_extension",
@@ -337,6 +341,24 @@ def render_card(spec: CardSpec, output: Path) -> None:
     canvas.save(output, format="PNG", optimize=True, compress_level=9)
 
 
+def card_spec_for(pair: SourcePair, source_dir: Path) -> CardSpec:
+    labels = (
+        ("Настройка", "Рабочее положение")
+        if pair.cardio
+        else ("Исходное положение", "Конечное положение")
+    )
+    return CardSpec(
+        title=pair.title,
+        start_image=source_dir / "start.jpg",
+        end_image=source_dir / "end.jpg",
+        start_label=labels[0],
+        end_label=labels[1],
+        start_hint=pair.start_hint,
+        end_hint=pair.end_hint,
+        attribution="free-exercise-db · Unlicense",
+    )
+
+
 def _git_output(source_repo: Path, *args: str) -> str:
     return subprocess.run(
         ["git", "-C", str(source_repo), *args],
@@ -401,17 +423,43 @@ def _verify_source_checkout(source_repo: Path) -> tuple[str, str]:
 
 def _license_markdown(revision: str, license_text: str) -> str:
     return (
-        "# Exercise photo licenses\n\n"
+        f"{LICENSE_BLOCK_START}\n"
         "## free-exercise-db\n\n"
         f"- Repository: {SOURCE_WEB_URL}\n"
         f"- Pinned revision: `{revision}`\n"
         "- License: Unlicense\n"
         f"- License file: {SOURCE_WEB_URL}/blob/{revision}/LICENSE.md\n\n"
+        f"Source records use `verified_at: {SOURCE_VERIFIED_AT}` for the date when "
+        "the local bytes, attribution, and license metadata were checked.\n\n"
         "Upstream license text at the pinned revision:\n\n"
         "```text\n"
         f"{license_text.rstrip()}\n"
         "```\n"
+        f"{LICENSE_BLOCK_END}\n"
     )
+
+
+def _merge_license_markdown(existing: str, managed_block: str) -> str:
+    if LICENSE_BLOCK_START in existing or LICENSE_BLOCK_END in existing:
+        if existing.count(LICENSE_BLOCK_START) != 1 or existing.count(LICENSE_BLOCK_END) != 1:
+            raise ValueError("managed free-exercise-db license block is malformed")
+        start = existing.index(LICENSE_BLOCK_START)
+        end = existing.index(LICENSE_BLOCK_END, start) + len(LICENSE_BLOCK_END)
+        return existing[:start] + managed_block.rstrip() + existing[end:]
+
+    heading = "## free-exercise-db"
+    if heading not in existing:
+        prefix = existing.rstrip()
+        return f"{prefix}\n\n{managed_block}" if prefix else f"# Exercise photo licenses\n\n{managed_block}"
+
+    start = existing.index(heading)
+    next_heading = existing.find("\n## ", start + len(heading))
+    prefix = existing[:start]
+    suffix = existing[next_heading + 1 :] if next_heading != -1 else ""
+    merged = f"{prefix}{managed_block.rstrip()}\n"
+    if suffix:
+        merged += f"\n{suffix.lstrip()}"
+    return merged
 
 
 def build_candidate_cards(
@@ -428,18 +476,43 @@ def build_candidate_cards(
 
     license_path = media_root / "LICENSES.md"
     license_path.parent.mkdir(parents=True, exist_ok=True)
-    license_path.write_text(_license_markdown(revision, license_text), encoding="utf-8")
+    existing_license_text = (
+        license_path.read_text(encoding="utf-8") if license_path.is_file() else ""
+    )
+    license_path.write_text(
+        _merge_license_markdown(
+            existing_license_text,
+            _license_markdown(revision, license_text),
+        ),
+        encoding="utf-8",
+    )
 
-    manifest["licenses"] = {
-        SOURCE_PROVIDER: {
-            "provider": SOURCE_PROVIDER,
-            "repository_url": SOURCE_WEB_URL,
-            "repository_revision": revision,
-            "license": "Unlicense",
-            "license_url": f"{SOURCE_WEB_URL}/blob/{revision}/LICENSE.md",
-        }
+    existing_licenses = manifest.get("licenses")
+    if not isinstance(existing_licenses, dict):
+        raise ValueError("exercise asset manifest licenses must be an object")
+    licenses = dict(existing_licenses)
+    licenses[SOURCE_PROVIDER] = {
+        "provider": SOURCE_PROVIDER,
+        "repository_url": SOURCE_WEB_URL,
+        "repository_revision": revision,
+        "license": "Unlicense",
+        "license_url": f"{SOURCE_WEB_URL}/blob/{revision}/LICENSE.md",
     }
-    source_records: dict[str, object] = {}
+    manifest["licenses"] = licenses
+
+    existing_sources = manifest.get("sources")
+    if not isinstance(existing_sources, dict):
+        raise ValueError("exercise asset manifest sources must be an object")
+    owned_source_ids = {
+        _source_id(_relative_source(pair, filename))
+        for pair in SOURCE_PAIRS
+        for filename in (pair.start_file, pair.end_file)
+    }
+    source_records: dict[str, object] = {
+        source_id: record
+        for source_id, record in existing_sources.items()
+        if source_id not in owned_source_ids
+    }
 
     for pair in SOURCE_PAIRS:
         raw_exercise = exercises.get(pair.code)
@@ -481,28 +554,12 @@ def build_candidate_cards(
                 "license_url": f"{SOURCE_WEB_URL}/blob/{revision}/LICENSE.md",
                 "sha256": checksum,
                 "role": role,
+                "verified_at": SOURCE_VERIFIED_AT,
             }
             exercise_source_ids.append(source_id)
 
         output = asset_dir / f"{pair.code}.png"
-        labels = (
-            ("Настройка", "Рабочее положение")
-            if pair.cardio
-            else ("Исходное положение", "Конечное положение")
-        )
-        render_card(
-            CardSpec(
-                title=pair.title,
-                start_image=copied_dir / "start.jpg",
-                end_image=copied_dir / "end.jpg",
-                start_label=labels[0],
-                end_label=labels[1],
-                start_hint=pair.start_hint,
-                end_hint=pair.end_hint,
-                attribution="free-exercise-db · Unlicense",
-            ),
-            output,
-        )
+        render_card(card_spec_for(pair, copied_dir), output)
         raw_exercise.update(
             {
                 "card": output.name,
@@ -519,42 +576,124 @@ def build_candidate_cards(
     )
 
 
-def validate_sources(
+def _required_text(record: dict[str, object], key: str, context: str) -> str:
+    value = record.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{context} needs a non-empty {key}")
+    return value
+
+
+def _required_https_url(record: dict[str, object], key: str, context: str) -> str:
+    value = _required_text(record, key, context)
+    if not value.startswith("https://") or len(value) <= len("https://"):
+        raise ValueError(f"{context} has an invalid {key}")
+    return value
+
+
+def _validate_license_records(licenses: object) -> dict[str, dict[str, object]]:
+    if not isinstance(licenses, dict) or not licenses:
+        raise ValueError("exercise license metadata is missing")
+    validated: dict[str, dict[str, object]] = {}
+    for provider, raw_license in licenses.items():
+        if not isinstance(provider, str) or not provider or not isinstance(raw_license, dict):
+            raise ValueError("exercise license record is malformed")
+        context = f"license record {provider!r}"
+        if raw_license.get("provider") != provider:
+            raise ValueError(f"{context} has an invalid provider")
+        _required_text(raw_license, "license", context)
+        _required_https_url(raw_license, "license_url", context)
+        validated[provider] = raw_license
+    return validated
+
+
+def _local_source_path(local_path: str, media_root: Path, context: str) -> Path:
+    relative = PurePosixPath(local_path)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or relative.parts[0] != "media_sources"
+        or ".." in relative.parts
+    ):
+        raise ValueError(f"{context} has an unsafe local_path")
+    root = media_root.resolve()
+    source_path = root.joinpath(*relative.parts[1:]).resolve()
+    try:
+        source_path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{context} points outside media_sources") from exc
+    return source_path
+
+
+def _validate_source_record(
     *,
-    manifest_path: Path = DEFAULT_MANIFEST,
-    asset_dir: Path = DEFAULT_ASSET_DIR,
-    media_root: Path = DEFAULT_MEDIA_ROOT,
+    source_id: str,
+    record: object,
+    expected_role: str,
+    licenses: dict[str, dict[str, object]],
+    media_root: Path,
+) -> tuple[str, str]:
+    context = f"exercise source {source_id!r}"
+    if not isinstance(record, dict):
+        raise ValueError(f"{context} record is missing")
+    provider = _required_text(record, "provider", context)
+    author = _required_text(record, "author", context)
+    if not author:
+        raise ValueError(f"{context} has no author")
+    source_url = _required_https_url(record, "source_url", context)
+    license_url = _required_https_url(record, "license_url", context)
+    license_name = _required_text(record, "license", context)
+    license_record = licenses.get(provider)
+    if license_record is None:
+        raise ValueError(f"{context} has no provider license record")
+    if license_record.get("license") != license_name:
+        raise ValueError(f"{context} license does not match its provider record")
+    if license_record.get("license_url") != license_url:
+        raise ValueError(f"{context} license URL does not match its provider record")
+    if record.get("role") != expected_role:
+        raise ValueError(f"{context} has invalid complementary phase roles")
+
+    verified_at = _required_text(record, "verified_at", context)
+    try:
+        date.fromisoformat(verified_at)
+    except ValueError as exc:
+        raise ValueError(f"{context} has an invalid verified_at date") from exc
+
+    checksum = _required_text(record, "sha256", context).lower()
+    if len(checksum) != 64 or any(character not in "0123456789abcdef" for character in checksum):
+        raise ValueError(f"{context} has an invalid sha256")
+    local_path = _required_text(record, "local_path", context)
+    source_path = _local_source_path(local_path, media_root, context)
+    if _sha256(source_path) != checksum:
+        raise ValueError(f"{context} checksum does not match its source file")
+    return local_path, source_url
+
+
+def _validate_card(code: str, exercise: dict[str, object], asset_dir: Path) -> None:
+    card_name = exercise.get("card")
+    checksum = exercise.get("sha256")
+    if card_name != f"{code}.png":
+        raise ValueError(f"exercise card path is invalid: {code}")
+    if not isinstance(checksum, str) or len(checksum) != 64:
+        raise ValueError(f"exercise card checksum is invalid: {code}")
+    if _sha256(asset_dir / card_name) != checksum.lower():
+        raise ValueError(f"exercise card checksum mismatch: {code}")
+
+
+def _validate_base_source_mapping(
+    *,
+    sources: dict[str, object],
+    exercises: dict[str, object],
 ) -> None:
-    manifest = _load_manifest(manifest_path)
-    licenses = manifest.get("licenses")
-    if not isinstance(licenses, dict) or not isinstance(licenses.get(SOURCE_PROVIDER), dict):
-        raise ValueError("free-exercise-db license metadata is missing")
-    license_record = licenses[SOURCE_PROVIDER]
-    assert isinstance(license_record, dict)
-    if license_record.get("license") != "Unlicense":
-        raise ValueError("free-exercise-db license metadata is invalid")
-    if license_record.get("repository_revision") != PINNED_SOURCE_REVISION:
-        raise ValueError("free-exercise-db manifest revision is not pinned")
-
-    sources = manifest.get("sources")
-    exercises = manifest["exercises"]
-    if not isinstance(sources, dict) or not isinstance(exercises, dict):
-        raise ValueError("exercise source metadata is missing")
-    expected_source_ids: set[str] = set()
-
     for pair in SOURCE_PAIRS:
-        raw_exercise = exercises.get(pair.code)
-        if not isinstance(raw_exercise, dict):
+        exercise = exercises.get(pair.code)
+        if not isinstance(exercise, dict):
             raise ValueError(f"manifest exercise is missing: {pair.code}")
-        source_ids = raw_exercise.get("source_ids")
-        if not isinstance(source_ids, list) or len(source_ids) != 2:
+        source_ids = exercise.get("source_ids")
+        if not isinstance(source_ids, list):
             raise ValueError(f"exercise source ids are incomplete: {pair.code}")
-        roles = ("setup", "working") if pair.cardio else ("start", "end")
-
-        for local_name, upstream_name, role, actual_id in zip(
+        for local_name, upstream_name, actual_id in zip(
             ("start.jpg", "end.jpg"),
             (pair.start_file, pair.end_file),
-            roles,
             source_ids,
             strict=True,
         ):
@@ -562,51 +701,93 @@ def validate_sources(
             expected_id = _source_id(relative_source)
             if actual_id != expected_id:
                 raise ValueError(f"exercise phase mapping is invalid: {pair.code}/{local_name}")
-            if expected_id in expected_source_ids:
-                raise ValueError(f"duplicate exercise source id: {expected_id}")
-            expected_source_ids.add(expected_id)
             record = sources.get(expected_id)
             if not isinstance(record, dict):
                 raise ValueError(f"exercise source record is missing: {expected_id}")
-            expected_local = f"media_sources/exercises/{pair.code}/{local_name}"
             expected_values = {
                 "provider": SOURCE_PROVIDER,
                 "repository_revision": PINNED_SOURCE_REVISION,
                 "upstream_path": relative_source,
-                "local_path": expected_local,
+                "local_path": f"media_sources/exercises/{pair.code}/{local_name}",
                 "author": "free-exercise-db contributors",
                 "license": "Unlicense",
                 "license_url": (
                     f"{SOURCE_WEB_URL}/blob/{PINNED_SOURCE_REVISION}/LICENSE.md"
                 ),
-                "role": role,
+                "source_url": (
+                    "https://raw.githubusercontent.com/yuhonas/free-exercise-db/"
+                    f"{PINNED_SOURCE_REVISION}/{relative_source}"
+                ),
+                "verified_at": SOURCE_VERIFIED_AT,
             }
             if any(record.get(key) != value for key, value in expected_values.items()):
                 raise ValueError(f"exercise source metadata is invalid: {expected_id}")
-            expected_url = (
-                "https://raw.githubusercontent.com/yuhonas/free-exercise-db/"
-                f"{PINNED_SOURCE_REVISION}/{relative_source}"
+
+
+def validate_sources(
+    *,
+    manifest_path: Path = DEFAULT_MANIFEST,
+    asset_dir: Path = DEFAULT_ASSET_DIR,
+    media_root: Path = DEFAULT_MEDIA_ROOT,
+) -> None:
+    manifest = _load_manifest(manifest_path)
+    licenses = _validate_license_records(manifest.get("licenses"))
+    base_license = licenses.get(SOURCE_PROVIDER)
+    if (
+        base_license is None
+        or base_license.get("license") != "Unlicense"
+        or base_license.get("repository_revision") != PINNED_SOURCE_REVISION
+    ):
+        raise ValueError("free-exercise-db license metadata is invalid")
+
+    sources = manifest.get("sources")
+    exercises = manifest["exercises"]
+    if not isinstance(sources, dict) or not isinstance(exercises, dict):
+        raise ValueError("exercise source metadata is missing")
+
+    referenced_source_ids: set[str] = set()
+    local_paths: set[str] = set()
+    source_urls: set[str] = set()
+    for code, raw_exercise in exercises.items():
+        if not isinstance(code, str) or not code or not isinstance(raw_exercise, dict):
+            raise ValueError("exercise manifest entry is malformed")
+        status = raw_exercise.get("status")
+        source_ids = raw_exercise.get("source_ids")
+        if status == "text_only":
+            if source_ids != [] or raw_exercise.get("card") is not None:
+                raise ValueError(f"text-only exercise has media metadata: {code}")
+            continue
+        if status not in {"candidate", "approved"}:
+            raise ValueError(f"exercise has an invalid media status: {code}")
+        if (
+            not isinstance(source_ids, list)
+            or len(source_ids) != 2
+            or not all(isinstance(source_id, str) and source_id for source_id in source_ids)
+            or len(set(source_ids)) != 2
+        ):
+            raise ValueError(f"exercise needs exactly two unique source ids: {code}")
+
+        roles = ("setup", "working") if code.startswith("cardio_") else ("start", "end")
+        for source_id, role in zip(source_ids, roles, strict=True):
+            if source_id in referenced_source_ids:
+                raise ValueError(f"exercise source id is referenced more than once: {source_id}")
+            referenced_source_ids.add(source_id)
+            local_path, source_url = _validate_source_record(
+                source_id=source_id,
+                record=sources.get(source_id),
+                expected_role=role,
+                licenses=licenses,
+                media_root=media_root,
             )
-            if record.get("source_url") != expected_url:
-                raise ValueError(f"exercise source URL is invalid: {expected_id}")
-            copied = media_root / "exercises" / pair.code / local_name
-            checksum = record.get("sha256")
-            if not isinstance(checksum, str) or len(checksum) != 64:
-                raise ValueError(f"exercise source checksum is invalid: {expected_id}")
-            if _sha256(copied) != checksum:
-                raise ValueError(f"exercise source checksum mismatch: {expected_id}")
+            if local_path in local_paths or source_url in source_urls:
+                raise ValueError(f"duplicate exercise source record: {source_id}")
+            local_paths.add(local_path)
+            source_urls.add(source_url)
+        _validate_card(code, raw_exercise, asset_dir)
 
-        card_name = raw_exercise.get("card")
-        card_checksum = raw_exercise.get("sha256")
-        if card_name != f"{pair.code}.png":
-            raise ValueError(f"exercise candidate card path is invalid: {pair.code}")
-        if not isinstance(card_checksum, str) or len(card_checksum) != 64:
-            raise ValueError(f"exercise candidate card checksum is invalid: {pair.code}")
-        if _sha256(asset_dir / card_name) != card_checksum:
-            raise ValueError(f"exercise candidate card checksum mismatch: {pair.code}")
-
-    if set(sources) != expected_source_ids:
-        raise ValueError("manifest contains unexpected or missing exercise source records")
+    if set(sources) != referenced_source_ids:
+        raise ValueError("manifest contains unreferenced or missing exercise source records")
+    _validate_base_source_mapping(sources=sources, exercises=exercises)
 
 
 def require_all_approved(

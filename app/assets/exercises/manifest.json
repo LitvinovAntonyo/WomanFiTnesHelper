@@ -20,7 +20,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "e13cd5838b04f617026dd097778d0ce298356992e7f972e1d71c7bf1fe1bb4c6",
-      "role": "setup"
+      "role": "setup",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/1.jpg": {
       "provider": "free-exercise-db",
@@ -32,7 +33,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "5b811c65e89b0eec47ae5006ad711b84c11e61fdbaac98334574cebe5855b025",
-      "role": "working"
+      "role": "working",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/0.jpg": {
       "provider": "free-exercise-db",
@@ -44,7 +46,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "c155ce19bd5dfe22484a47d99ee7cf1918d9ca4d8bc7d962d3ceaa70fa39fdd5",
-      "role": "setup"
+      "role": "setup",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/1.jpg": {
       "provider": "free-exercise-db",
@@ -56,7 +59,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "f40b3f77d7f0f0d0af7ff49cbbb006ef3cd362664bdde2c7bb24dd57d822b003",
-      "role": "working"
+      "role": "working",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/0.jpg": {
       "provider": "free-exercise-db",
@@ -68,7 +72,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "dc37a609b3e8de862f5e4b83c9d05488c9c5cd825073210dd6e46f2a5b436cfb",
-      "role": "setup"
+      "role": "setup",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/1.jpg": {
       "provider": "free-exercise-db",
@@ -80,7 +85,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "390a6508a8ffd71998cf184f0b9d6a218630069f343b5678781608ddfe304faa",
-      "role": "working"
+      "role": "working",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/0.jpg": {
       "provider": "free-exercise-db",
@@ -92,7 +98,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "c84ece2e8b52314c8605e9fc3ef1930a59fec475ff1b5a7f98687a4b8fc580a7",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/1.jpg": {
       "provider": "free-exercise-db",
@@ -104,7 +111,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "2cbd4aa6c22162a209a7ced5d1a68274d44e88780c8c3936c7fab57d6e9918fd",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/0.jpg": {
       "provider": "free-exercise-db",
@@ -116,7 +124,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "572cef392f2a10c377153c5fe0acd5e0b4d0e881024ff6a7fdd4a6320dc7ed51",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/1.jpg": {
       "provider": "free-exercise-db",
@@ -128,7 +137,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "c438500671ec2dc6fa726086ec4a56903635ee65e37b3449174f18aaed1409c9",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/0.jpg": {
       "provider": "free-exercise-db",
@@ -140,7 +150,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "929bc29751c35d0a624840b24501e74dc59438d351e66cc017e7ee8682fb3346",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/1.jpg": {
       "provider": "free-exercise-db",
@@ -152,7 +163,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "781952e629e8a4cff549df94ee6b1da7e32c7cd507382d47e8566718c07807dd",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/0.jpg": {
       "provider": "free-exercise-db",
@@ -164,7 +176,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "25764ce3cd65e6007b7b8603d658fe7c15f605353b6850aa40e26f078f2d1912",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/1.jpg": {
       "provider": "free-exercise-db",
@@ -176,7 +189,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "d28a7c93978b7010859e7e058a3d382cac9570c68fd1140c7c90a24e67df3502",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/0.jpg": {
       "provider": "free-exercise-db",
@@ -188,7 +202,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "f8721b7d75025f29d6a733a6f5571577f541e38891b2da4f152ac88d3f6e957a",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/1.jpg": {
       "provider": "free-exercise-db",
@@ -200,7 +215,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "ecd48b616f38fefe802b7adc12a9f0c5520fe579a59152ebc96c7e39ce4bcd35",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/0.jpg": {
       "provider": "free-exercise-db",
@@ -212,7 +228,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "54fd46441d63459e3cdd26f26b826ad049e835fb7f1984b42398fdfbdefb5bfa",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/1.jpg": {
       "provider": "free-exercise-db",
@@ -224,7 +241,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "9e04d0e306d8fee608305766b14a56df1d1312956d374152f58dcbf267d591a9",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/0.jpg": {
       "provider": "free-exercise-db",
@@ -236,7 +254,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "3b363f261901744a6e833a19fcd835db95495d0beda0eb6695e583ea2dfcf3ab",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/1.jpg": {
       "provider": "free-exercise-db",
@@ -248,7 +267,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "40be513dd0d6fad0fbd734431e4e83f924b7385b90b53d9ec7eab8809d96df7a",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/0.jpg": {
       "provider": "free-exercise-db",
@@ -260,7 +280,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "f5a4adf972f93a6c7b09e003f23005a1163653a7e36b71f1e374acab0243ddf7",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/1.jpg": {
       "provider": "free-exercise-db",
@@ -272,7 +293,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "0b8e1a0b0fff86cafff45d851ea631a20d469713e9fd735031d3fffb0299fde6",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/1.jpg": {
       "provider": "free-exercise-db",
@@ -284,7 +306,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "f4e08d4ad4e6542f5dd923bbfabe9a28bf6c960bed02b1b9d65f6bafd6ceb051",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/0.jpg": {
       "provider": "free-exercise-db",
@@ -296,7 +319,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "55079d514ae8d4dbc526731bb5120748e74a084ebcd546eaa890fa273427f0dc",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/0.jpg": {
       "provider": "free-exercise-db",
@@ -308,7 +332,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "f54417ed87011bddfe961e9f11a208705d716732926bbcf58eab31382230f73b",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/1.jpg": {
       "provider": "free-exercise-db",
@@ -320,7 +345,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "94af6bd9748cfa75fb7ef36055301a1b20bcff56934240b117cf5ffeb0865567",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/1.jpg": {
       "provider": "free-exercise-db",
@@ -332,7 +358,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "7f471857324312b07e14f3fe73dd783d2ecd3a3ff15f9f52e9813390cda314db",
-      "role": "start"
+      "role": "start",
+      "verified_at": "2026-09-02"
     },
     "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/0.jpg": {
       "provider": "free-exercise-db",
@@ -344,7 +371,8 @@
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md",
       "sha256": "8819cc3e699ff1d0b5d18c21a411a0e380fc0f316e83d9dcaa1207617f78ea23",
-      "role": "end"
+      "role": "end",
+      "verified_at": "2026-09-02"
     }
   },
   "exercises": {
@@ -420,7 +448,7 @@
     "hack_squat": {
       "card": "hack_squat.png",
       "status": "candidate",
-      "sha256": "d9ff638ef5c722d91b5d1ff6bb94d3c5450a074ad39f8033b1dd388d9b46baa1",
+      "sha256": "eec928858793c8d4ebfaf8b118feee84b750b741f01cb5220ecc1e2d74cbbe62",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/1.jpg"

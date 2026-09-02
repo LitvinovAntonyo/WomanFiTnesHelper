@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -34,6 +36,67 @@ EXPECTED_PHASES = {
     "machine_shoulder_press": ("Leverage_Shoulder_Press", "0.jpg", "1.jpg"),
     "pec_deck": ("Butterfly", "1.jpg", "0.jpg"),
 }
+
+
+def batch_paths(tmp_path):
+    manifest_path = tmp_path / "assets" / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        (ROOT / "app" / "assets" / "exercises" / "manifest.json").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    asset_dir = manifest_path.parent
+    media_root = tmp_path / "media_sources"
+    args = [
+        "--manifest",
+        str(manifest_path),
+        "--asset-dir",
+        str(asset_dir),
+        "--media-root",
+        str(media_root),
+        "--source-repo",
+        str(SOURCE_REPO),
+    ]
+    return manifest_path, asset_dir, media_root, args
+
+
+def add_glute_card(asset_dir: Path, media_root: Path) -> tuple[Path, Path, Path]:
+    glute_dir = media_root / "exercises" / "glute_kickback"
+    glute_dir.mkdir(parents=True, exist_ok=True)
+    start = glute_dir / "start.jpg"
+    end = glute_dir / "end.jpg"
+    card = asset_dir / "glute_kickback.png"
+    Image.new("RGB", (40, 40), "red").save(start, format="JPEG")
+    Image.new("RGB", (40, 40), "blue").save(end, format="JPEG")
+    Image.new("RGB", (1254, 1254), "white").save(card, format="PNG")
+    return start, end, card
+
+
+def second_provider_glute_records(start: Path, end: Path) -> tuple[dict, dict]:
+    provider = "synthetic-commons"
+    license_url = "https://creativecommons.org/publicdomain/zero/1.0/"
+    license_record = {
+        "provider": provider,
+        "license": "CC0-1.0",
+        "license_url": license_url,
+    }
+    records = {}
+    for role, path in (("start", start), ("end", end)):
+        source_id = f"{provider}:glute-kickback:{role}"
+        records[source_id] = {
+            "provider": provider,
+            "source_url": f"https://example.invalid/glute-kickback/{role}.jpg",
+            "local_path": f"media_sources/exercises/glute_kickback/{role}.jpg",
+            "author": "Synthetic fixture author",
+            "license": "CC0-1.0",
+            "license_url": license_url,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "role": role,
+            "verified_at": "2026-09-02",
+        }
+    return license_record, records
 
 
 def write_manifest(tmp_path, exercises: object) -> None:
@@ -280,6 +343,8 @@ def test_public_domain_sources_match_pinned_upstream_bytes_and_phase_roles():
             assert source["local_path"] == f"media_sources/exercises/{code}/{local_name}"
             assert source["role"] == role
             assert source["sha256"] == expected_sha
+            assert source["verified_at"] == "2026-09-02"
+            assert date.fromisoformat(source["verified_at"]) == date(2026, 9, 2)
             assert copied.read_bytes() == upstream.read_bytes()
 
         card = ROOT / "app" / "assets" / "exercises" / f"{code}.png"
@@ -297,26 +362,7 @@ def test_batch_cli_builds_deterministically_and_keeps_incomplete_approval_gate(
 ):
     from scripts.build_exercise_cards import main
 
-    manifest_path = tmp_path / "assets" / "manifest.json"
-    manifest_path.parent.mkdir(parents=True)
-    manifest_path.write_text(
-        (ROOT / "app" / "assets" / "exercises" / "manifest.json").read_text(
-            encoding="utf-8"
-        ),
-        encoding="utf-8",
-    )
-    asset_dir = manifest_path.parent
-    media_root = tmp_path / "media_sources"
-    common_args = [
-        "--manifest",
-        str(manifest_path),
-        "--asset-dir",
-        str(asset_dir),
-        "--media-root",
-        str(media_root),
-        "--source-repo",
-        str(SOURCE_REPO),
-    ]
+    manifest_path, asset_dir, _, common_args = batch_paths(tmp_path)
 
     assert main(["--status", "candidate", *common_args]) == 0
     first_manifest = manifest_path.read_bytes()
@@ -339,3 +385,128 @@ def test_batch_cli_builds_deterministically_and_keeps_incomplete_approval_gate(
     assert second_cards == first_cards
     assert main(["--require-all-approved", *common_args]) == 1
     assert manifest_path.read_bytes() == first_manifest
+
+
+def test_base_rebuild_preserves_and_validates_a_second_provider_glute_pair(tmp_path):
+    from scripts.build_exercise_cards import main
+
+    manifest_path, asset_dir, media_root, common_args = batch_paths(tmp_path)
+    assert main(["--status", "candidate", *common_args]) == 0
+    start, end, card = add_glute_card(asset_dir, media_root)
+    license_record, source_records = second_provider_glute_records(start, end)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    source_ids = list(source_records)
+    manifest["licenses"]["synthetic-commons"] = license_record
+    manifest["sources"].update(source_records)
+    manifest["exercises"]["glute_kickback"] = {
+        "card": card.name,
+        "status": "approved",
+        "sha256": hashlib.sha256(card.read_bytes()).hexdigest(),
+        "source_ids": source_ids,
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    license_doc = media_root / "LICENSES.md"
+    license_doc.write_text(
+        license_doc.read_text(encoding="utf-8")
+        + "\n## synthetic-commons\n\nSynthetic fixture license notes.\n",
+        encoding="utf-8",
+    )
+
+    assert main(["--status", "candidate", *common_args]) == 0
+
+    rebuilt = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert rebuilt["licenses"]["synthetic-commons"] == license_record
+    assert {source_id: rebuilt["sources"][source_id] for source_id in source_ids} == (
+        source_records
+    )
+    assert rebuilt["exercises"]["glute_kickback"] == manifest["exercises"][
+        "glute_kickback"
+    ]
+    assert "Synthetic fixture license notes." in license_doc.read_text(encoding="utf-8")
+    assert main(["--validate-sources", *common_args]) == 0
+    for exercise in rebuilt["exercises"].values():
+        exercise["status"] = "approved"
+    manifest_path.write_text(
+        json.dumps(rebuilt, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    assert main(["--require-all-approved", *common_args]) == 0
+
+
+def test_require_all_approved_rejects_glute_provenance_bypasses(tmp_path):
+    from scripts.build_exercise_cards import main
+
+    manifest_path, asset_dir, media_root, common_args = batch_paths(tmp_path)
+    assert main(["--status", "candidate", *common_args]) == 0
+    start, end, card = add_glute_card(asset_dir, media_root)
+    base = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for exercise in base["exercises"].values():
+        exercise["status"] = "approved"
+    base["exercises"]["glute_kickback"].update(
+        {
+            "card": card.name,
+            "sha256": hashlib.sha256(card.read_bytes()).hexdigest(),
+        }
+    )
+    _, unlicensed_records = second_provider_glute_records(start, end)
+    scenarios = (
+        ([], {}),
+        (["missing:start", "missing:end"], {}),
+        (list(unlicensed_records), unlicensed_records),
+    )
+
+    for source_ids, extra_sources in scenarios:
+        manifest = deepcopy(base)
+        manifest["exercises"]["glute_kickback"]["source_ids"] = source_ids
+        manifest["sources"].update(extra_sources)
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        assert main(["--require-all-approved", *common_args]) == 1
+
+
+def test_validate_sources_rejects_unreferenced_duplicate_and_malformed_records(
+    tmp_path,
+):
+    from scripts.build_exercise_cards import main
+
+    manifest_path, asset_dir, media_root, common_args = batch_paths(tmp_path)
+    assert main(["--status", "candidate", *common_args]) == 0
+    start, end, card = add_glute_card(asset_dir, media_root)
+    license_record, glute_records = second_provider_glute_records(start, end)
+    base = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    unreferenced = deepcopy(base)
+    first_source = deepcopy(next(iter(unreferenced["sources"].values())))
+    unreferenced["sources"]["unreferenced:record"] = first_source
+
+    duplicate = deepcopy(base)
+    duplicate["exercises"]["glute_kickback"] = {
+        "card": card.name,
+        "status": "approved",
+        "sha256": hashlib.sha256(card.read_bytes()).hexdigest(),
+        "source_ids": duplicate["exercises"]["hack_squat"]["source_ids"],
+    }
+
+    malformed = deepcopy(base)
+    malformed["licenses"]["synthetic-commons"] = license_record
+    malformed["sources"].update(glute_records)
+    malformed["sources"][next(iter(glute_records))].pop("author")
+    malformed["exercises"]["glute_kickback"] = {
+        "card": card.name,
+        "status": "approved",
+        "sha256": hashlib.sha256(card.read_bytes()).hexdigest(),
+        "source_ids": list(glute_records),
+    }
+
+    for manifest in (unreferenced, duplicate, malformed):
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        assert main(["--validate-sources", *common_args]) == 1

@@ -1,11 +1,14 @@
 # Exercise photo licenses
 
+<!-- BEGIN managed free-exercise-db license -->
 ## free-exercise-db
 
 - Repository: https://github.com/yuhonas/free-exercise-db
 - Pinned revision: `a859101d633a01c4a1a920d6a8ce41dabba0705f`
 - License: Unlicense
 - License file: https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md
+
+Source records use `verified_at: 2026-09-02` for the date when the local bytes, attribution, and license metadata were checked.
 
 Upstream license text at the pinned revision:
 
@@ -35,3 +38,4 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <https://unlicense.org>
 ```
+<!-- END managed free-exercise-db license -->
