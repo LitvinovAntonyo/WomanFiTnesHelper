@@ -6,15 +6,18 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.database import Database
-from app.exercise_library import CARDIO_CODES, alternative_code_for
+from app.exercise_library import CARDIO_CODES, alternative_code_for, rest_seconds_for
 from app.models import (
     Achievement,
     Exercise,
     ExerciseOutcome,
     ExerciseResult,
+    ExerciseSetResult,
     Reminder,
     TelegramMediaCache,
     User,
@@ -34,11 +37,30 @@ class WorkoutStep:
     previous_weight: Decimal | None
 
 
+@dataclass(frozen=True, slots=True)
+class WeightChange:
+    exercise_name: str
+    previous_kg: Decimal
+    current_kg: Decimal
+
+
 @dataclass(slots=True)
 class WorkoutSummary:
     duration_minutes: int
     completed_exercises: int
     skipped_exercises: int
+    weight_changes: tuple[WeightChange, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SetLogState:
+    session_id: int
+    result_id: int
+    set_number: int
+    completed_sets: int
+    sets_planned: int
+    exercise_complete: bool
+    rest_seconds: int
 
 
 DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
@@ -96,6 +118,47 @@ EXTRA_EXERCISES: tuple[tuple[str, str, bool, str], ...] = (
 class WorkoutService:
     def __init__(self, database: Database):
         self.database = database
+
+    @staticmethod
+    async def _last_logged_set_for_exercise(
+        session: AsyncSession,
+        *,
+        user_id: int,
+        exercise_id: int,
+        excluded_session_id: int,
+        require_weight: bool = False,
+    ) -> ExerciseSetResult | None:
+        statement = (
+            select(ExerciseSetResult)
+            .join(ExerciseResult)
+            .join(WorkoutSession)
+            .join(
+                WorkoutExercise,
+                ExerciseResult.workout_exercise_id == WorkoutExercise.id,
+            )
+            .outerjoin(
+                ExerciseOutcome,
+                ExerciseOutcome.exercise_result_id == ExerciseResult.id,
+            )
+            .where(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.status == "completed",
+                WorkoutSession.id != excluded_session_id,
+                func.coalesce(
+                    ExerciseOutcome.effective_exercise_id,
+                    WorkoutExercise.exercise_id,
+                )
+                == exercise_id,
+            )
+            .order_by(
+                WorkoutSession.completed_at.desc(),
+                ExerciseSetResult.set_number.desc(),
+            )
+            .limit(1)
+        )
+        if require_weight:
+            statement = statement.where(ExerciseSetResult.weight_kg.is_not(None))
+        return await session.scalar(statement)
 
     async def seed_templates(self) -> None:
         async with self.database.session() as session:
@@ -480,26 +543,19 @@ class WorkoutService:
                 if result.outcome and result.outcome.effective_exercise
                 else item.exercise
             )
-            previous_weight = await session.scalar(
-                select(ExerciseResult.weight_kg)
-                .join(WorkoutExercise)
-                .join(WorkoutSession)
-                .where(
-                    WorkoutSession.user_id == workout.user_id,
-                    WorkoutSession.status == "completed",
-                    WorkoutExercise.exercise_id == exercise.id,
-                    ExerciseResult.weight_kg.is_not(None),
-                    WorkoutSession.id != workout.id,
-                )
-                .order_by(WorkoutSession.completed_at.desc())
-                .limit(1)
+            previous_set = await self._last_logged_set_for_exercise(
+                session,
+                user_id=workout.user_id,
+                exercise_id=exercise.id,
+                excluded_session_id=workout.id,
+                require_weight=True,
             )
             return WorkoutStep(
                 session=workout,
                 result=result,
                 item=item,
                 exercise=exercise,
-                previous_weight=previous_weight,
+                previous_weight=previous_set.weight_kg if previous_set else None,
             )
 
     async def replace_exercise(self, result_id: int, telegram_id: int) -> int:
@@ -644,6 +700,133 @@ class WorkoutService:
             result.weight_kg = weight.quantize(Decimal("0.01"))
             return result
 
+    async def record_set(
+        self,
+        result_id: int,
+        telegram_id: int,
+        reps: int,
+        weight_kg: Decimal | None,
+    ) -> SetLogState:
+        if not 1 <= reps <= 100:
+            raise ValueError("Укажи от 1 до 100 повторений")
+        if weight_kg is not None and not Decimal("0") <= weight_kg <= Decimal("999"):
+            raise ValueError("Укажи вес от 0 до 999 кг")
+        normalized_weight = (
+            weight_kg.quantize(Decimal("0.01")) if weight_kg is not None else None
+        )
+
+        try:
+            async with self.database.session() as session:
+                result = await session.scalar(
+                    select(ExerciseResult)
+                    .options(
+                        joinedload(ExerciseResult.workout_exercise).joinedload(
+                            WorkoutExercise.exercise
+                        ),
+                        joinedload(ExerciseResult.outcome).joinedload(
+                            ExerciseOutcome.effective_exercise
+                        ),
+                    )
+                    .join(WorkoutSession)
+                    .join(User)
+                    .where(
+                        ExerciseResult.id == result_id,
+                        User.telegram_id == telegram_id,
+                    )
+                )
+                if result is None:
+                    raise ValueError("Упражнение не найдено")
+                if result.completed_sets >= result.sets_planned:
+                    raise ValueError("Упражнение уже завершено")
+
+                next_number = result.completed_sets + 1
+                session.add(
+                    ExerciseSetResult(
+                        exercise_result_id=result.id,
+                        set_number=next_number,
+                        reps=reps,
+                        weight_kg=normalized_weight,
+                    )
+                )
+                await session.flush()
+
+                result.completed_sets = next_number
+                result.reps = reps
+                result.weight_kg = normalized_weight
+                result.completed = next_number >= result.sets_planned
+                exercise = (
+                    result.outcome.effective_exercise
+                    if result.outcome and result.outcome.effective_exercise
+                    else result.workout_exercise.exercise
+                )
+                return SetLogState(
+                    session_id=result.session_id,
+                    result_id=result.id,
+                    set_number=next_number,
+                    completed_sets=result.completed_sets,
+                    sets_planned=result.sets_planned,
+                    exercise_complete=result.completed,
+                    rest_seconds=rest_seconds_for(exercise.code) or 0,
+                )
+        except IntegrityError as exc:
+            raise ValueError("Этот подход уже записан") from exc
+
+    async def repeat_last_set(
+        self, result_id: int, telegram_id: int
+    ) -> SetLogState:
+        values = await self.last_set_values(result_id, telegram_id)
+        if values is None:
+            raise ValueError("Нет предыдущего подхода для повтора")
+        weight_kg, reps = values
+        return await self.record_set(result_id, telegram_id, reps, weight_kg)
+
+    async def last_set_values(
+        self, result_id: int, telegram_id: int
+    ) -> tuple[Decimal | None, int] | None:
+        async with self.database.session() as session:
+            result = await session.scalar(
+                select(ExerciseResult)
+                .options(
+                    joinedload(ExerciseResult.session),
+                    joinedload(ExerciseResult.workout_exercise).joinedload(
+                        WorkoutExercise.exercise
+                    ),
+                    joinedload(ExerciseResult.outcome).joinedload(
+                        ExerciseOutcome.effective_exercise
+                    ),
+                )
+                .join(WorkoutSession)
+                .join(User)
+                .where(
+                    ExerciseResult.id == result_id,
+                    User.telegram_id == telegram_id,
+                )
+            )
+            if result is None:
+                raise ValueError("Упражнение не найдено")
+
+            previous = await session.scalar(
+                select(ExerciseSetResult)
+                .where(ExerciseSetResult.exercise_result_id == result.id)
+                .order_by(ExerciseSetResult.set_number.desc())
+                .limit(1)
+            )
+            if previous is None:
+                exercise = (
+                    result.outcome.effective_exercise
+                    if result.outcome and result.outcome.effective_exercise
+                    else result.workout_exercise.exercise
+                )
+                previous = await self._last_logged_set_for_exercise(
+                    session,
+                    user_id=result.session.user_id,
+                    exercise_id=exercise.id,
+                    excluded_session_id=result.session_id,
+                )
+            if previous is None:
+                return None
+            return previous.weight_kg, previous.reps
+
     async def complete_next_set(self, result_id: int, telegram_id: int) -> tuple[int, bool]:
         async with self.database.session() as session:
             result = await session.scalar(
@@ -713,7 +896,17 @@ class WorkoutService:
         async with self.database.session() as session:
             workout = await session.scalar(
                 select(WorkoutSession)
-                .options(selectinload(WorkoutSession.results).selectinload(ExerciseResult.outcome))
+                .options(
+                    selectinload(WorkoutSession.results).selectinload(
+                        ExerciseResult.sets_log
+                    ),
+                    selectinload(WorkoutSession.results)
+                    .joinedload(ExerciseResult.workout_exercise)
+                    .joinedload(WorkoutExercise.exercise),
+                    selectinload(WorkoutSession.results)
+                    .joinedload(ExerciseResult.outcome)
+                    .joinedload(ExerciseOutcome.effective_exercise),
+                )
                 .where(WorkoutSession.id == session_id)
             )
             if workout is None:
@@ -724,8 +917,53 @@ class WorkoutService:
             skipped = sum(
                 1 for result in workout.results if result.outcome and result.outcome.status == "skipped"
             )
+            weight_changes: list[WeightChange] = []
+            results = sorted(
+                workout.results,
+                key=lambda result: result.workout_exercise.position,
+            )
+            for result in results:
+                if not result.completed:
+                    continue
+                exercise = (
+                    result.outcome.effective_exercise
+                    if result.outcome and result.outcome.effective_exercise
+                    else result.workout_exercise.exercise
+                )
+                if not exercise.requires_weight:
+                    continue
+                current_weight = next(
+                    (
+                        logged_set.weight_kg
+                        for logged_set in reversed(result.sets_log)
+                        if logged_set.weight_kg is not None
+                    ),
+                    None,
+                )
+                if current_weight is None:
+                    continue
+                previous_set = await self._last_logged_set_for_exercise(
+                    session,
+                    user_id=workout.user_id,
+                    exercise_id=exercise.id,
+                    excluded_session_id=workout.id,
+                    require_weight=True,
+                )
+                if (
+                    previous_set is not None
+                    and previous_set.weight_kg is not None
+                    and previous_set.weight_kg != current_weight
+                ):
+                    weight_changes.append(
+                        WeightChange(
+                            exercise_name=exercise.name,
+                            previous_kg=previous_set.weight_kg,
+                            current_kg=current_weight,
+                        )
+                    )
             return WorkoutSummary(
                 duration_minutes=elapsed,
                 completed_exercises=len(workout.results) - skipped,
                 skipped_exercises=skipped,
+                weight_changes=tuple(weight_changes),
             )

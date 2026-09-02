@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import func, select
 
-from app.models import ExerciseResult, WorkoutSession, WorkoutTemplate
+from app.exercise_library import rest_seconds_for
+from app.models import (
+    ExerciseResult,
+    ExerciseSetResult,
+    WorkoutSession,
+    WorkoutTemplate,
+)
+from app.services.workouts import WeightChange
 
 
 async def complete_workout(workouts, telegram_id: int):
@@ -31,6 +40,32 @@ async def complete_workout_with_efforts(workouts, telegram_id: int, efforts: dic
             telegram_id,
             efforts.get(step.exercise.code),
         )
+    assert await workouts.finish_if_complete(workout.id)
+    return workout.id
+
+
+async def complete_workout_with_weighted_sets(
+    workouts,
+    telegram_id: int,
+    exercise_code: str,
+    weights: tuple[Decimal, ...],
+) -> int:
+    workout = await workouts.active_or_new(telegram_id)
+    await workouts.begin(workout.id, telegram_id)
+    while True:
+        step = await workouts.get_step(workout.id, telegram_id)
+        if step is None:
+            break
+        if step.exercise.code == exercise_code:
+            for weight in weights:
+                await workouts.record_set(
+                    step.result.id,
+                    telegram_id,
+                    reps=12,
+                    weight_kg=weight,
+                )
+        else:
+            await workouts.complete_exercise(step.result.id, telegram_id)
     assert await workouts.finish_if_complete(workout.id)
     return workout.id
 
@@ -170,6 +205,166 @@ async def test_strength_sets_are_persisted_one_by_one(app_services, onboarded_us
     assert session_id == workout.id
     assert not completed
     assert state[1:3] == (1, 2)
+
+
+@pytest.mark.asyncio
+async def test_record_set_is_idempotent_and_completes_only_planned_sets(
+    app_services, onboarded_user
+):
+    _, database, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+
+    first = await workouts.record_set(
+        step.result.id, 10001, reps=12, weight_kg=Decimal("25")
+    )
+    assert first.completed_sets == 1
+    assert first.set_number == 1
+    assert not first.exercise_complete
+    assert first.rest_seconds == rest_seconds_for(step.exercise.code)
+
+    second = await workouts.record_set(
+        step.result.id, 10001, reps=12, weight_kg=Decimal("25")
+    )
+    assert second.completed_sets == 2
+    assert second.exercise_complete
+
+    with pytest.raises(ValueError, match="уже завершено"):
+        await workouts.record_set(
+            step.result.id, 10001, reps=12, weight_kg=Decimal("25")
+        )
+
+    async with database.session() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(ExerciseSetResult)
+                    .where(ExerciseSetResult.exercise_result_id == step.result.id)
+                    .order_by(ExerciseSetResult.set_number)
+                )
+            ).all()
+        )
+    assert [(row.set_number, row.reps, row.weight_kg) for row in rows] == [
+        (1, 12, Decimal("25.00")),
+        (2, 12, Decimal("25.00")),
+    ]
+
+
+@pytest.mark.parametrize("reps", [0, 101])
+@pytest.mark.asyncio
+async def test_record_set_rejects_invalid_repetitions(
+    app_services, onboarded_user, reps
+):
+    _, _, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+    with pytest.raises(ValueError, match="повтор"):
+        await workouts.record_set(step.result.id, 10001, reps=reps, weight_kg=None)
+
+
+@pytest.mark.parametrize("weight", [Decimal("-0.01"), Decimal("999.01")])
+@pytest.mark.asyncio
+async def test_record_set_rejects_invalid_weight(
+    app_services, onboarded_user, weight
+):
+    _, _, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+    with pytest.raises(ValueError, match="вес"):
+        await workouts.record_set(
+            step.result.id, 10001, reps=12, weight_kg=weight
+        )
+
+
+@pytest.mark.asyncio
+async def test_repeat_last_set_copies_weight_and_reps(app_services, onboarded_user):
+    _, _, _, workouts, _, _ = app_services
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+    await workouts.record_set(step.result.id, 10001, reps=12, weight_kg=Decimal("25"))
+    repeated = await workouts.repeat_last_set(step.result.id, 10001)
+    assert repeated.completed_sets == 2
+    assert await workouts.last_set_values(step.result.id, 10001) == (
+        Decimal("25.00"),
+        12,
+    )
+
+
+@pytest.mark.asyncio
+async def test_previous_values_come_from_last_completed_occurrence(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    await complete_workout_with_weighted_sets(
+        workouts,
+        10001,
+        "seated_leg_curl",
+        (Decimal("22.5"), Decimal("25")),
+    )
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
+
+    workout = await workouts.active_or_new(10001)
+    await workouts.begin(workout.id, 10001)
+    cardio = await workouts.get_step(workout.id, 10001)
+    assert cardio is not None
+    await workouts.complete_exercise(cardio.result.id, 10001)
+    step = await workouts.get_step(workout.id, 10001)
+    assert step is not None
+
+    assert step.exercise.code == "seated_leg_curl"
+    assert step.previous_weight == Decimal("25.00")
+    assert await workouts.last_set_values(step.result.id, 10001) == (
+        Decimal("25.00"),
+        12,
+    )
+    repeated = await workouts.repeat_last_set(step.result.id, 10001)
+    assert repeated.completed_sets == 1
+
+
+@pytest.mark.asyncio
+async def test_summary_reports_change_from_final_logged_set(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
+    await complete_workout_with_weighted_sets(
+        workouts,
+        10001,
+        "leg_press",
+        (Decimal("22.5"), Decimal("25")),
+    )
+    await complete_workout(workouts, 10001)
+    await complete_workout(workouts, 10001)
+    current_id = await complete_workout_with_weighted_sets(
+        workouts,
+        10001,
+        "leg_press",
+        (Decimal("25"), Decimal("27.5")),
+    )
+
+    summary = await workouts.summary(current_id)
+
+    assert summary.weight_changes == (
+        WeightChange(
+            exercise_name="Жим ногами",
+            previous_kg=Decimal("25.00"),
+            current_kg=Decimal("27.50"),
+        ),
+    )
 
 
 @pytest.mark.asyncio
