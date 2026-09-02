@@ -192,7 +192,28 @@ async def test_two_easy_repeats_add_only_one_rep_next_time(
     )
 
     assert chest_press_result.reps == 13
-    assert chest_press_result.sets_planned == 3
+    assert chest_press_result.sets_planned == 2
+
+
+@pytest.mark.asyncio
+async def test_first_six_sessions_plan_two_strength_sets_and_seventh_plans_three(
+    app_services, onboarded_user
+):
+    _, _, _, workouts, _, _ = app_services
+
+    for session_number in range(1, 8):
+        workout = await workouts.active_or_new(10001)
+        plan = await workouts.get_plan(workout.id, 10001)
+        expected_sets = 2 if session_number <= 6 else 3
+
+        assert all(
+            result.sets_planned == expected_sets
+            for result in plan.results
+            if result.reps is not None
+        )
+
+        if session_number < 7:
+            assert await complete_workout(workouts, 10001) == workout.id
 
 
 @pytest.mark.asyncio

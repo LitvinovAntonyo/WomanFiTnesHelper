@@ -233,7 +233,7 @@ class WorkoutService:
                 reps = await self._adapted_reps(session, user_id, item)
                 sets_planned = (
                     min(item.sets, 2)
-                    if completed_count < 4 and item.reps is not None
+                    if completed_count < 6 and item.reps is not None
                     else item.sets
                 )
                 session.add(
