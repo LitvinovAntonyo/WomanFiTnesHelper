@@ -10,3 +10,5 @@ data/*.sqlite3
 data/*.sqlite3-*
 logs/*.log*
 .DS_Store
+.private/exercise-media/
+review/local-ai-pilot/
