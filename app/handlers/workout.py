@@ -435,6 +435,12 @@ def build_workout_router(context: AppContext) -> Router:
             reply_markup=cardio_keyboard(session_id),
         )
 
+    async def show_plan_then_ask_cardio(
+        message: Message, session_id: int, telegram_id: int
+    ) -> None:
+        await send_plan(message, session_id, telegram_id)
+        await ask_for_cardio(message, session_id)
+
     async def continue_after_logged_set(
         message: Message, telegram_id: int, logged_set: SetLogState
     ) -> None:
@@ -463,8 +469,9 @@ def build_workout_router(context: AppContext) -> Router:
             await message.answer("Продолжаем с того места, где остановились.")
             await send_current_step(message, workout.id, message.from_user.id)
         else:
-            await message.answer("План на сегодня рассчитан на 50–60 минут.")
-            await ask_for_cardio(message, workout.id)
+            await show_plan_then_ask_cardio(
+                message, workout.id, message.from_user.id
+            )
 
     @router.message(F.text == RESET_TODAY_TEXT)
     async def reset_current_day(message: Message, state: FSMContext) -> None:
@@ -516,7 +523,9 @@ def build_workout_router(context: AppContext) -> Router:
         await clear_pending_set_input(state)
         session_id = int((callback.data or "").rsplit(":", 1)[1])
         if callback.message:
-            await ask_for_cardio(callback.message, session_id)
+            await show_plan_then_ask_cardio(
+                callback.message, session_id, callback.from_user.id
+            )
         await callback.answer()
 
     @router.callback_query(F.data.startswith("session:light:"))
@@ -542,7 +551,9 @@ def build_workout_router(context: AppContext) -> Router:
                 else "Облегчённый режим уже учтён для этой тренировки."
             )
             await callback.message.answer(message)
-            await ask_for_cardio(callback.message, session_id)
+            await show_plan_then_ask_cardio(
+                callback.message, session_id, callback.from_user.id
+            )
         await callback.answer("Облегчённый режим включён")
 
     @router.callback_query(F.data.startswith("cardio:select:"))
@@ -555,7 +566,6 @@ def build_workout_router(context: AppContext) -> Router:
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
-            await send_plan(callback.message, session_id, callback.from_user.id)
             await send_current_step(callback.message, session_id, callback.from_user.id)
         await callback.answer(f"Выбрано: {CARDIO_LABELS[cardio_code]}")
 

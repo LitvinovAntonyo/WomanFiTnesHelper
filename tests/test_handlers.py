@@ -226,6 +226,21 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
 
     await dispatcher.feed_update(bot, user_message(20, "🏋️ Начать тренировку"))
     workout = await workouts.active_or_new(10001)
+    loaded_plan = await workouts.get_plan(workout.id, 10001)
+    before_cardio = [
+        getattr(method, "text", "") or "" for method in session.methods
+    ]
+    plan_index = next(
+        index for index, text in enumerate(before_cardio) if "Полный план:" in text
+    )
+    cardio_index = next(
+        index
+        for index, text in enumerate(before_cardio)
+        if "С чего начнём кардио-разогрев" in text
+    )
+    assert plan_index < cardio_index
+    assert loaded_plan.template.name in before_cardio[plan_index]
+    assert loaded_plan.template.focus in before_cardio[plan_index]
     await dispatcher.feed_update(
         bot,
         callback_update(21, f"cardio:select:{workout.id}:cardio_elliptical"),
@@ -271,6 +286,7 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     assert any("50–60 минут" in text for text in sent_texts)
     assert any("запасом 3–4" in text for text in sent_texts)
     assert any("Заминка в программу не входит" in text for text in sent_texts)
+    assert sum("Полный план:" in text for text in sent_texts) == 1
     assert any("Напиши вес и повторения" in text for text in sent_texts)
     set_prompt = next(
         method
