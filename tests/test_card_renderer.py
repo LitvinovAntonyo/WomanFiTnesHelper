@@ -276,6 +276,63 @@ def test_candidate_item_discovery_preserves_manifest_code_when_filename_differs(
     ]
 
 
+def test_candidate_item_discovery_skips_malformed_non_candidates(tmp_path):
+    from scripts.build_exercise_contact_sheet import (
+        ContactSheetItem,
+        candidate_items_from_manifest,
+    )
+
+    asset_dir = tmp_path / "assets"
+    asset_dir.mkdir()
+    card = solid_image(asset_dir / "row.png", (20, 20), "white")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "exercises": {
+                    "seated_row": {"card": "row.png", "status": "candidate"},
+                    "malformed_approved": "not an object",
+                    "unknown_status": {"card": None, "status": "future"},
+                    "malformed_text_only": {
+                        "card": "must-not-be-read.png",
+                        "status": "text_only",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = candidate_items_from_manifest(manifest, asset_dir)
+
+    assert items == [
+        ContactSheetItem(code="seated_row", card=card, status="candidate")
+    ]
+
+
+def test_candidate_item_discovery_rejects_a_malformed_candidate(tmp_path):
+    from scripts.build_exercise_contact_sheet import candidate_items_from_manifest
+
+    asset_dir = tmp_path / "assets"
+    asset_dir.mkdir()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "exercises": {
+                    "seated_row": {"card": None, "status": "candidate"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="candidate entry is missing its card"):
+        candidate_items_from_manifest(manifest, asset_dir)
+
+
 def test_review_item_discovery_includes_text_only_blocker_without_a_photo(tmp_path):
     from scripts.build_exercise_contact_sheet import (
         ContactSheetItem,
@@ -364,6 +421,42 @@ def test_render_contact_sheet_draws_an_explicit_text_only_blocker(tmp_path, monk
         "status: text_only",
     ]
     assert not (tmp_path / "glute_kickback.png").exists()
+
+
+def test_non_glute_text_only_placeholder_uses_neutral_copy(tmp_path, monkeypatch):
+    from scripts.build_exercise_contact_sheet import ContactSheetItem, render_contact_sheet
+
+    drawn_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def recording_text(draw, xy, text, *args, **kwargs):
+        drawn_text.append(text)
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", recording_text)
+    output = tmp_path / "future-text-only.png"
+
+    render_contact_sheet(
+        [
+            ContactSheetItem(
+                code="future_text_only",
+                card=None,
+                status="text_only",
+            )
+        ],
+        output,
+    )
+
+    assert drawn_text == [
+        "ФОТО НЕТ",
+        "ТЕКСТОВЫЙ РЕЖИМ",
+        "Фотокарточка пока недоступна",
+        "нужна отдельная проверка",
+        "future_text_only",
+        "status: text_only",
+    ]
+    assert not any("тренаж" in text.lower() for text in drawn_text)
+    assert not any("трос" in text.lower() for text in drawn_text)
 
 
 def test_project_review_sheet_covers_every_required_code_exactly_once(tmp_path):

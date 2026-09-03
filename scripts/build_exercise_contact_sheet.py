@@ -28,6 +28,7 @@ TEXT_COLOR = "#263333"
 BORDER_COLOR = "#D7DEDE"
 BLOCKER_BACKGROUND = "#FFF1ED"
 BLOCKER_COLOR = "#A93226"
+TEXT_ONLY_BACKGROUND = "#EDF3F3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,15 +54,18 @@ def _safe_asset_path(asset_dir: Path, card_name: str) -> Path:
     return card
 
 
-def review_items_from_manifest(
-    manifest_path: Path, asset_dir: Path
-) -> list[ContactSheetItem]:
+def _exercise_entries(manifest_path: Path) -> dict[str, object]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or not isinstance(manifest.get("exercises"), dict):
         raise ValueError("exercise asset manifest must contain an exercises object")
+    return manifest["exercises"]
 
+
+def review_items_from_manifest(
+    manifest_path: Path, asset_dir: Path
+) -> list[ContactSheetItem]:
     items: list[ContactSheetItem] = []
-    for code, raw_entry in manifest["exercises"].items():
+    for code, raw_entry in _exercise_entries(manifest_path).items():
         if not isinstance(code, str) or not code:
             raise ValueError("review exercise code must be a non-empty string")
         if not isinstance(raw_entry, dict):
@@ -87,11 +91,20 @@ def review_items_from_manifest(
 def candidate_items_from_manifest(
     manifest_path: Path, asset_dir: Path
 ) -> list[ContactSheetItem]:
-    return [
-        item
-        for item in review_items_from_manifest(manifest_path, asset_dir)
-        if item.status == "candidate"
-    ]
+    candidates: list[ContactSheetItem] = []
+    for code, raw_entry in _exercise_entries(manifest_path).items():
+        if not isinstance(raw_entry, dict) or raw_entry.get("status") != "candidate":
+            continue
+        if not isinstance(code, str) or not code:
+            raise ValueError("candidate exercise code must be a non-empty string")
+        card_name = raw_entry.get("card")
+        if not isinstance(card_name, str) or not card_name:
+            raise ValueError(f"candidate entry is missing its card: {code}")
+        card = _safe_asset_path(asset_dir, card_name)
+        if not card.is_file():
+            raise FileNotFoundError(f"candidate card is missing: {card}")
+        candidates.append(ContactSheetItem(code=code, card=card, status="candidate"))
+    return sorted(candidates, key=lambda item: item.code)
 
 
 def render_contact_sheet(
@@ -120,6 +133,22 @@ def render_contact_sheet(
         cell_y = MARGIN + row * (ROW_HEIGHT + ROW_GAP)
         image_x = cell_x + (COLUMN_WIDTH - THUMBNAIL_SIZE) // 2
         if item.card is None:
+            is_glute_blocker = item.code == "glute_kickback"
+            background = BLOCKER_BACKGROUND if is_glute_blocker else TEXT_ONLY_BACKGROUND
+            accent = BLOCKER_COLOR if is_glute_blocker else TEXT_COLOR
+            placeholder_copy = (
+                (
+                    "БЛОКЕР РЕЛИЗА",
+                    "Нужна пара фото на спец. тренажёре",
+                    "не пол / не трос",
+                )
+                if is_glute_blocker
+                else (
+                    "ТЕКСТОВЫЙ РЕЖИМ",
+                    "Фотокарточка пока недоступна",
+                    "нужна отдельная проверка",
+                )
+            )
             draw.rectangle(
                 (
                     image_x,
@@ -127,32 +156,32 @@ def render_contact_sheet(
                     image_x + THUMBNAIL_SIZE - 1,
                     cell_y + THUMBNAIL_SIZE - 1,
                 ),
-                fill=BLOCKER_BACKGROUND,
+                fill=background,
             )
             draw.text(
                 (image_x + THUMBNAIL_SIZE // 2, cell_y + 72),
                 "ФОТО НЕТ",
                 font=_font(28),
-                fill=BLOCKER_COLOR,
+                fill=accent,
                 anchor="mm",
             )
             draw.text(
                 (image_x + THUMBNAIL_SIZE // 2, cell_y + 116),
-                "БЛОКЕР РЕЛИЗА",
+                placeholder_copy[0],
                 font=_font(22),
-                fill=BLOCKER_COLOR,
+                fill=accent,
                 anchor="mm",
             )
             draw.text(
                 (image_x + THUMBNAIL_SIZE // 2, cell_y + 174),
-                "Нужна пара фото на спец. тренажёре",
+                placeholder_copy[1],
                 font=_font(16),
                 fill=TEXT_COLOR,
                 anchor="mm",
             )
             draw.text(
                 (image_x + THUMBNAIL_SIZE // 2, cell_y + 211),
-                "не пол / не трос",
+                placeholder_copy[2],
                 font=_font(18),
                 fill=TEXT_COLOR,
                 anchor="mm",
