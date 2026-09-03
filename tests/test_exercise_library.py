@@ -315,12 +315,12 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
     text = step_text(step)
     caption = step_caption(step)
 
-    assert "Исходное положение" in text
-    assert "Движение" in text
-    assert "Дыхание" in text
-    assert "Главный ориентир" in text
+    assert "Как начать" in text
+    assert "Как делать" in text
+    assert "Как дышать" in text
+    assert "Запомни" in text
     assert "Не делай так" in text
-    assert "лопаток назад и вниз" in text
+    assert "локтями задвигаешь два ящика назад" in text
     assert "Отдых после подхода: 90 секунд" in caption
     assert "Прошлый рабочий вес: 25 кг" in caption
     assert "Цель сегодня: 12 повторений" in caption
@@ -329,6 +329,29 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
     step.minimum_weight_increase_suggested = True
     progression_caption = step_caption(step)
     assert "минимальный доступный шаг выше прошлого рабочего веса" in progression_caption
+
+
+def test_current_guidance_is_short_and_uses_plain_language():
+    banned_terms = {
+        "каденс",
+        "нейтральная",
+        "тазобедренный",
+        "квадрицепсы",
+        "амплитуда создаётся",
+    }
+
+    for code, guidance in EXERCISE_GUIDANCE.items():
+        fields = (
+            guidance.setup,
+            guidance.movement,
+            guidance.breathing,
+            guidance.cues,
+            guidance.mistakes,
+        )
+        full_text = " ".join(fields).lower()
+        assert len(full_text.split()) <= 85, code
+        assert all(len(field.split()) <= 24 for field in fields), code
+        assert not any(term in full_text for term in banned_terms), code
 
 
 def test_active_strength_guidance_promises_per_set_logging_not_no_logging():

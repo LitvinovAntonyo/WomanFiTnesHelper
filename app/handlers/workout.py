@@ -333,10 +333,10 @@ def step_text(step: WorkoutStep) -> str:
     guidance = guidance_for(step.exercise.code)
     return (
         f"Техника — {step.exercise.name}\n\n"
-        f"Исходное положение\n{guidance.setup}\n\n"
-        f"Движение\n{guidance.movement}\n\n"
-        f"Дыхание\n{guidance.breathing}\n\n"
-        f"Главный ориентир\n{guidance.cues}\n\n"
+        f"Как начать\n{guidance.setup}\n\n"
+        f"Как делать\n{guidance.movement}\n\n"
+        f"Как дышать\n{guidance.breathing}\n\n"
+        f"Запомни\n{guidance.cues}\n\n"
         f"Не делай так\n{guidance.mistakes}"
     )
 
