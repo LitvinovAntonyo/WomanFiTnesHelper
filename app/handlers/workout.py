@@ -341,6 +341,10 @@ def step_text(step: WorkoutStep) -> str:
     )
 
 
+def step_card_text(step: WorkoutStep) -> str:
+    return f"{step_caption(step)}\n\n{step_text(step)}"
+
+
 def build_workout_router(context: AppContext) -> Router:
     router = Router(name="workout")
     rest_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
@@ -393,36 +397,36 @@ def build_workout_router(context: AppContext) -> Router:
                     reply_markup=session_feedback_keyboard(session_id),
                 )
             return
-        image_path = card_path_for(step.exercise.code)
-        if image_path is not None:
-            media_asset_key = asset_key_for(step.exercise.code)
-            cached_file_id = await context.workouts.media_file_id(media_asset_key)
-            try:
-                sent = await message.answer_photo(
-                    cached_file_id or FSInputFile(image_path), caption=step_caption(step)
-                )
-                photos = getattr(sent, "photo", None)
-                if not cached_file_id and photos:
-                    await context.workouts.remember_media_file_id(
-                        media_asset_key, photos[-1].file_id
-                    )
-            except (TelegramAPIError, OSError):
-                await message.answer(step_caption(step))
-        else:
-            await message.answer(step_caption(step))
         last_set = None
         if not step.item.duration_minutes:
             last_set = await context.workouts.last_set_values(
                 step.result.id, telegram_id
             )
-        await message.answer(
-            step_text(step),
-            reply_markup=step_keyboard(
-                step,
-                repeat_available=last_set is not None,
-                last_set=last_set,
-            ),
+        keyboard = step_keyboard(
+            step,
+            repeat_available=last_set is not None,
+            last_set=last_set,
         )
+        card_text = step_card_text(step)
+        image_path = card_path_for(step.exercise.code)
+        if image_path is None:
+            await message.answer(card_text, reply_markup=keyboard)
+            return
+        media_asset_key = asset_key_for(step.exercise.code)
+        cached_file_id = await context.workouts.media_file_id(media_asset_key)
+        try:
+            sent = await message.answer_photo(
+                cached_file_id or FSInputFile(image_path),
+                caption=card_text,
+                reply_markup=keyboard,
+            )
+            photos = getattr(sent, "photo", None)
+            if not cached_file_id and photos:
+                await context.workouts.remember_media_file_id(
+                    media_asset_key, photos[-1].file_id
+                )
+        except (TelegramAPIError, OSError):
+            await message.answer(card_text, reply_markup=keyboard)
 
     async def send_plan(message: Message, session_id: int, telegram_id: int) -> None:
         workout = await context.workouts.get_plan(session_id, telegram_id)

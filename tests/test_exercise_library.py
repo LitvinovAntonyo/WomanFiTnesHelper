@@ -17,6 +17,7 @@ from app.handlers.workout import (
     parse_set_input,
     plan_text,
     step_caption,
+    step_card_text,
     step_keyboard,
     step_text,
 )
@@ -322,6 +323,7 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
 
     text = step_text(step)
     caption = step_caption(step)
+    card_text = step_card_text(step)
 
     assert "Как начать" in text
     assert "Как делать" in text
@@ -333,6 +335,9 @@ def test_strength_card_contains_detailed_technique_and_fixed_rest():
     assert "Прошлый рабочий вес: 25 кг" in caption
     assert "Цель сегодня: 12 повторений" in caption
     assert "Запас: 3–4 технически чистых повтора" in caption
+    assert caption in card_text
+    assert text in card_text
+    assert len(card_text) <= 1024
 
     step.minimum_weight_increase_suggested = True
     progression_caption = step_caption(step)
@@ -360,6 +365,36 @@ def test_current_guidance_is_short_and_uses_plain_language():
         assert len(full_text.split()) <= 85, code
         assert all(len(field.split()) <= 24 for field in fields), code
         assert not any(term in full_text for term in banned_terms), code
+
+
+def test_all_current_exercise_cards_fit_telegram_photo_caption():
+    for code in EXERCISE_GUIDANCE:
+        cardio = code in CARDIO_CODES
+        step = SimpleNamespace(
+            exercise=SimpleNamespace(
+                code=code,
+                name="Отведение ноги назад в тренажёре",
+            ),
+            item=SimpleNamespace(
+                duration_minutes=10 if cardio else None,
+                position=6,
+                reps=None if cardio else 20,
+            ),
+            result=SimpleNamespace(
+                id=77,
+                completed_sets=0,
+                sets_planned=3,
+                reps=None if cardio else 20,
+            ),
+            previous_weight=None if cardio else Decimal("999"),
+            reserve_reps="3–4",
+            minimum_weight_increase_suggested=not cardio,
+            session=SimpleNamespace(
+                template=SimpleNamespace(items=[object()] * 6)
+            ),
+        )
+
+        assert len(step_card_text(step)) <= 1024, code
 
 
 def test_active_strength_guidance_promises_per_set_logging_not_no_logging():

@@ -350,10 +350,13 @@ async def test_photo_send_failure_falls_back_to_text_and_actions(
         bot, callback_update(700, f"cardio:select:{workout.id}:cardio_treadmill")
     )
 
-    texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any(isinstance(method, SendPhoto) for method in session.methods)
-    assert any("1/6 · Кардио" in text for text in texts)
-    technique = next(method for method in session.methods if "Техника —" in (getattr(method, "text", "") or ""))
+    technique = next(
+        method
+        for method in session.methods
+        if "Техника —" in (getattr(method, "text", "") or "")
+    )
+    assert "1/6 · Кардио" in technique.text
     callbacks = [
         button.callback_data
         for row in technique.reply_markup.inline_keyboard
@@ -390,6 +393,13 @@ async def test_changed_card_bypasses_legacy_telegram_file_id(
 
     sent_photo = next(method for method in session.methods if isinstance(method, SendPhoto))
     assert isinstance(sent_photo.photo, FSInputFile)
+    assert "1/6 · Кардио" in sent_photo.caption
+    assert "Техника —" in sent_photo.caption
+    assert sent_photo.reply_markup is not None
+    assert not any(
+        "Техника —" in (getattr(method, "text", "") or "")
+        for method in session.methods
+    )
     await llm.close()
     await bot.session.close()
 
