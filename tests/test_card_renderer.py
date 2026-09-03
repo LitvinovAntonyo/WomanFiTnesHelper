@@ -274,3 +274,134 @@ def test_candidate_item_discovery_preserves_manifest_code_when_filename_differs(
             status="candidate",
         )
     ]
+
+
+def test_review_item_discovery_includes_text_only_blocker_without_a_photo(tmp_path):
+    from scripts.build_exercise_contact_sheet import (
+        ContactSheetItem,
+        review_items_from_manifest,
+    )
+
+    asset_dir = tmp_path / "assets"
+    asset_dir.mkdir()
+    for name in ("candidate.png", "approved.png"):
+        solid_image(asset_dir / name, (20, 20), "white")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "exercises": {
+                    "candidate": {
+                        "card": "candidate.png",
+                        "status": "candidate",
+                    },
+                    "approved": {
+                        "card": "approved.png",
+                        "status": "approved",
+                    },
+                    "glute_kickback": {
+                        "card": None,
+                        "status": "text_only",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    items = review_items_from_manifest(manifest, asset_dir)
+
+    assert items == [
+        ContactSheetItem(
+            code="approved",
+            card=asset_dir / "approved.png",
+            status="approved",
+        ),
+        ContactSheetItem(
+            code="candidate",
+            card=asset_dir / "candidate.png",
+            status="candidate",
+        ),
+        ContactSheetItem(
+            code="glute_kickback",
+            card=None,
+            status="text_only",
+        ),
+    ]
+
+
+def test_render_contact_sheet_draws_an_explicit_text_only_blocker(tmp_path, monkeypatch):
+    from scripts.build_exercise_contact_sheet import ContactSheetItem, render_contact_sheet
+
+    drawn_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def recording_text(draw, xy, text, *args, **kwargs):
+        drawn_text.append(text)
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", recording_text)
+    output = tmp_path / "text-only.png"
+
+    render_contact_sheet(
+        [
+            ContactSheetItem(
+                code="glute_kickback",
+                card=None,
+                status="text_only",
+            )
+        ],
+        output,
+    )
+
+    assert drawn_text == [
+        "ФОТО НЕТ",
+        "БЛОКЕР РЕЛИЗА",
+        "Нужна пара фото на спец. тренажёре",
+        "не пол / не трос",
+        "glute_kickback",
+        "status: text_only",
+    ]
+    assert not (tmp_path / "glute_kickback.png").exists()
+
+
+def test_project_review_sheet_covers_every_required_code_exactly_once(tmp_path):
+    from scripts.build_exercise_contact_sheet import (
+        build_contact_sheet,
+        review_items_from_manifest,
+    )
+
+    manifest = ROOT / "app" / "assets" / "exercises" / "manifest.json"
+    asset_dir = manifest.parent
+    expected_codes = {
+        "cardio_treadmill",
+        "cardio_elliptical",
+        "cardio_bike",
+        "seated_leg_curl",
+        "glute_kickback",
+        "hip_abduction",
+        "lat_pulldown",
+        "chest_press",
+        "hack_squat",
+        "leg_extension",
+        "hip_adduction",
+        "seated_row",
+        "leg_press",
+        "machine_shoulder_press",
+        "pec_deck",
+    }
+
+    items = review_items_from_manifest(manifest, asset_dir)
+    codes = [item.code for item in items]
+    output = tmp_path / "review-sheet.png"
+    build_contact_sheet(manifest, asset_dir, output)
+
+    assert set(codes) == expected_codes
+    assert len(codes) == len(expected_codes)
+    glute = next(item for item in items if item.code == "glute_kickback")
+    assert glute.status == "text_only"
+    assert glute.card is None
+    assert not (asset_dir / "glute_kickback.png").exists()
+    with Image.open(output) as sheet:
+        assert sheet.size == (1128, 1968)

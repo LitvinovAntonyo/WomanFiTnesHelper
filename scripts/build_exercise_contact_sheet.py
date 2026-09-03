@@ -26,12 +26,14 @@ ROW_GAP = 24
 BACKGROUND = "#F4F6F6"
 TEXT_COLOR = "#263333"
 BORDER_COLOR = "#D7DEDE"
+BLOCKER_BACKGROUND = "#FFF1ED"
+BLOCKER_COLOR = "#A93226"
 
 
 @dataclass(frozen=True, slots=True)
 class ContactSheetItem:
     code: str
-    card: Path
+    card: Path | None
     status: Literal["candidate", "approved", "text_only"]
 
 
@@ -51,27 +53,45 @@ def _safe_asset_path(asset_dir: Path, card_name: str) -> Path:
     return card
 
 
-def candidate_items_from_manifest(
+def review_items_from_manifest(
     manifest_path: Path, asset_dir: Path
 ) -> list[ContactSheetItem]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or not isinstance(manifest.get("exercises"), dict):
         raise ValueError("exercise asset manifest must contain an exercises object")
 
-    candidates: list[ContactSheetItem] = []
+    items: list[ContactSheetItem] = []
     for code, raw_entry in manifest["exercises"].items():
         if not isinstance(code, str) or not code:
-            raise ValueError("candidate exercise code must be a non-empty string")
-        if not isinstance(raw_entry, dict) or raw_entry.get("status") != "candidate":
-            continue
+            raise ValueError("review exercise code must be a non-empty string")
+        if not isinstance(raw_entry, dict):
+            raise ValueError(f"review entry must be an object: {code}")
+        status = raw_entry.get("status")
+        if status not in {"candidate", "approved", "text_only"}:
+            raise ValueError(f"review entry has an unsupported status: {code}")
         card_name = raw_entry.get("card")
-        if not isinstance(card_name, str) or not card_name:
+        if status == "text_only":
+            if card_name is not None:
+                raise ValueError(f"text-only review entry must not have a card: {code}")
+            items.append(ContactSheetItem(code=code, card=None, status="text_only"))
             continue
+        if not isinstance(card_name, str) or not card_name:
+            raise ValueError(f"review entry is missing its card: {code}")
         card = _safe_asset_path(asset_dir, card_name)
         if not card.is_file():
-            raise FileNotFoundError(f"candidate card is missing: {card}")
-        candidates.append(ContactSheetItem(code=code, card=card, status="candidate"))
-    return sorted(candidates, key=lambda item: item.code)
+            raise FileNotFoundError(f"review card is missing: {card}")
+        items.append(ContactSheetItem(code=code, card=card, status=status))
+    return sorted(items, key=lambda item: item.code)
+
+
+def candidate_items_from_manifest(
+    manifest_path: Path, asset_dir: Path
+) -> list[ContactSheetItem]:
+    return [
+        item
+        for item in review_items_from_manifest(manifest_path, asset_dir)
+        if item.status == "candidate"
+    ]
 
 
 def render_contact_sheet(
@@ -99,14 +119,53 @@ def render_contact_sheet(
         cell_x = MARGIN + column * (COLUMN_WIDTH + COLUMN_GAP)
         cell_y = MARGIN + row * (ROW_HEIGHT + ROW_GAP)
         image_x = cell_x + (COLUMN_WIDTH - THUMBNAIL_SIZE) // 2
-        with Image.open(item.card) as source:
-            thumbnail = ImageOps.fit(
-                source.convert("RGB"),
-                (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
-                method=Image.Resampling.LANCZOS,
-                centering=(0.5, 0.5),
+        if item.card is None:
+            draw.rectangle(
+                (
+                    image_x,
+                    cell_y,
+                    image_x + THUMBNAIL_SIZE - 1,
+                    cell_y + THUMBNAIL_SIZE - 1,
+                ),
+                fill=BLOCKER_BACKGROUND,
             )
-        sheet.paste(thumbnail, (image_x, cell_y))
+            draw.text(
+                (image_x + THUMBNAIL_SIZE // 2, cell_y + 72),
+                "ФОТО НЕТ",
+                font=_font(28),
+                fill=BLOCKER_COLOR,
+                anchor="mm",
+            )
+            draw.text(
+                (image_x + THUMBNAIL_SIZE // 2, cell_y + 116),
+                "БЛОКЕР РЕЛИЗА",
+                font=_font(22),
+                fill=BLOCKER_COLOR,
+                anchor="mm",
+            )
+            draw.text(
+                (image_x + THUMBNAIL_SIZE // 2, cell_y + 174),
+                "Нужна пара фото на спец. тренажёре",
+                font=_font(16),
+                fill=TEXT_COLOR,
+                anchor="mm",
+            )
+            draw.text(
+                (image_x + THUMBNAIL_SIZE // 2, cell_y + 211),
+                "не пол / не трос",
+                font=_font(18),
+                fill=TEXT_COLOR,
+                anchor="mm",
+            )
+        else:
+            with Image.open(item.card) as source:
+                thumbnail = ImageOps.fit(
+                    source.convert("RGB"),
+                    (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.5),
+                )
+            sheet.paste(thumbnail, (image_x, cell_y))
         draw.rectangle(
             (
                 image_x,
@@ -142,7 +201,7 @@ def build_contact_sheet(
     asset_dir: Path = DEFAULT_ASSET_DIR,
     output: Path = DEFAULT_OUTPUT,
 ) -> None:
-    items = candidate_items_from_manifest(manifest_path, asset_dir)
+    items = review_items_from_manifest(manifest_path, asset_dir)
     render_contact_sheet(items, output)
 
 
