@@ -11,7 +11,15 @@ from aiogram.client.session.base import BaseSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.methods import SendPhoto, TelegramMethod
-from aiogram.types import CallbackQuery, Chat, ForceReply, FSInputFile, Message, Update
+from aiogram.types import (
+    CallbackQuery,
+    Chat,
+    ForceReply,
+    FSInputFile,
+    Message,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from aiogram.types import User as TelegramUser
 from sqlalchemy import func, select
 
@@ -19,6 +27,7 @@ from app.context import AppContext
 from app.handlers import build_routers
 from app.handlers import workout as workout_module
 from app.handlers.start import has_consecutive_days
+from app.keyboards import RESET_TODAY_TEXT
 from app.llm import build_llm_service
 from app.models import ExerciseSetResult, Reminder, WorkoutSessionFeedback
 from app.services.scheduler import ReminderService
@@ -285,6 +294,14 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     assert plan_index < cardio_index
     assert loaded_plan.template.name in before_cardio[plan_index]
     assert loaded_plan.template.focus in before_cardio[plan_index]
+    plan_method = session.methods[plan_index]
+    assert isinstance(plan_method.reply_markup, ReplyKeyboardMarkup)
+    plan_labels = [
+        button.text
+        for row in plan_method.reply_markup.keyboard
+        for button in row
+    ]
+    assert RESET_TODAY_TEXT in plan_labels
     await dispatcher.feed_update(
         bot,
         callback_update(21, f"cardio:select:{workout.id}:cardio_elliptical"),
@@ -860,6 +877,18 @@ async def test_start_menu_and_reminder_accept_clear_pending_set_input(
     await dispatcher.feed_update(bot, user_message(602, "🏋️ Начать тренировку"))
     assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
     assert (await workouts.active_or_new(10001)).id == workout.id
+    resume_method = next(
+        method
+        for method in session.methods
+        if "Продолжаем с того места" in (getattr(method, "text", "") or "")
+    )
+    assert isinstance(resume_method.reply_markup, ReplyKeyboardMarkup)
+    resume_labels = [
+        button.text
+        for row in resume_method.reply_markup.keyboard
+        for button in row
+    ]
+    assert RESET_TODAY_TEXT in resume_labels
     await dispatcher.feed_update(bot, user_message(603, "25 12"))
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)

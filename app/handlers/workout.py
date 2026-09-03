@@ -430,7 +430,10 @@ def build_workout_router(context: AppContext) -> Router:
 
     async def send_plan(message: Message, session_id: int, telegram_id: int) -> None:
         workout = await context.workouts.get_plan(session_id, telegram_id)
-        await message.answer(plan_text(workout))
+        await message.answer(
+            plan_text(workout),
+            reply_markup=menu_keyboard(context.settings.show_reset_button),
+        )
 
     async def ask_for_cardio(message: Message, session_id: int) -> None:
         await message.answer(
@@ -470,7 +473,10 @@ def build_workout_router(context: AppContext) -> Router:
         await clear_pending_set_input(state)
         workout = await context.workouts.active_or_new(message.from_user.id)
         if workout.started_at:
-            await message.answer("Продолжаем с того места, где остановились.")
+            await message.answer(
+                "Продолжаем с того места, где остановились.",
+                reply_markup=menu_keyboard(context.settings.show_reset_button),
+            )
             await send_current_step(message, workout.id, message.from_user.id)
         else:
             await show_plan_then_ask_cardio(
