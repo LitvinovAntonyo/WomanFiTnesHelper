@@ -474,14 +474,14 @@ def main() -> int:
     output_dir = validate_output_dir(args.output_dir)
     source_dir = args.private_root / "hack_squat"
     generated_start = normalize_generated_phase(
-        source_dir / "generated-start-raw.png",
+        output_dir / "generated-start-raw.png",
         source_dir / "source-start.png",
-        source_dir / "generated-start.png",
+        output_dir / "generated-start.png",
     )
     generated_end = normalize_generated_phase(
-        source_dir / "generated-end-raw.png",
+        output_dir / "generated-end-raw.png",
         source_dir / "source-end.png",
-        source_dir / "generated-end.png",
+        output_dir / "generated-end.png",
     )
     build_comparison(
         source_dir / "source-start.png",
@@ -544,8 +544,10 @@ Before committing, run `git diff --cached --name-only` and fail if an image, ide
 - Read: `.private/exercise-media/identity/reference-01.png` through `reference-06.png`
 - Read: `.private/exercise-media/hack_squat/source-start.png`
 - Read: `.private/exercise-media/hack_squat/source-end.png`
-- Create, ignored: `.private/exercise-media/hack_squat/generated-start.png`
-- Create, ignored: `.private/exercise-media/hack_squat/generated-end.png`
+- Create, ignored: `review/local-ai-pilot/generated-start-raw.png`
+- Create, ignored: `review/local-ai-pilot/generated-start.png`
+- Create, ignored: `review/local-ai-pilot/generated-end-raw.png`
+- Create, ignored: `review/local-ai-pilot/generated-end.png`
 - Create, ignored: `review/local-ai-pilot/hack_squat-comparison.png`
 - Create, ignored: `review/local-ai-pilot/hack_squat-card.png`
 
@@ -603,16 +605,16 @@ Copy the selected built-in output from the exact local path returned in the tool
 output hint to:
 
 ```text
-.private/exercise-media/hack_squat/generated-start-raw.png
+review/local-ai-pilot/generated-start-raw.png
 ```
 
 Then normalize from the original source size without cropping:
 
 ```python
 normalize_generated_phase(
-    Path(".private/exercise-media/hack_squat/generated-start-raw.png"),
+    Path("review/local-ai-pilot/generated-start-raw.png"),
     Path(".private/exercise-media/hack_squat/source-start.png"),
-    Path(".private/exercise-media/hack_squat/generated-start.png"),
+    Path("review/local-ai-pilot/generated-start.png"),
 )
 ```
 
@@ -635,8 +637,9 @@ Avoid: copying the start pose, changed squat depth, changed foot placement, chan
 - [ ] **Step 7: Inspect and save the end output**
 
 Apply the same geometry-first rejection rule and one-retry limit as the start phase.
-Copy the selected raw output to `generated-end-raw.png` and normalize it without crop
-to `generated-end.png` using the verified end source.
+Copy the selected raw output to `review/local-ai-pilot/generated-end-raw.png` and
+normalize it without crop to `review/local-ai-pilot/generated-end.png` using the
+verified end source.
 
 - [ ] **Step 8: Build the private review artifacts**
 

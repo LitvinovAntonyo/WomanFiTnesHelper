@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,16 @@ def test_normalize_generated_phase_rejects_changed_aspect_ratio(tmp_path):
 
     source = image(tmp_path / "source.png", "red", (760, 760))
     generated = image(tmp_path / "generated.png", "blue", (1024, 768))
+
+    with pytest.raises(ValueError, match="aspect ratio"):
+        normalize_generated_phase(generated, source, tmp_path / "normalized.png")
+
+
+def test_normalize_generated_phase_rejects_any_aspect_ratio_mismatch(tmp_path):
+    from scripts.build_identity_pilot_review import normalize_generated_phase
+
+    source = image(tmp_path / "source.png", "red", (1000, 1000))
+    generated = image(tmp_path / "generated.png", "blue", (1000, 1001))
 
     with pytest.raises(ValueError, match="aspect ratio"):
         normalize_generated_phase(generated, source, tmp_path / "normalized.png")
@@ -84,3 +95,41 @@ def test_cli_script_is_runnable_by_path():
 
     assert result.returncode == 0
     assert "--private-root" in result.stdout
+
+
+def test_cli_keeps_generated_files_out_of_private_root(tmp_path, monkeypatch):
+    from scripts.build_identity_pilot_review import DEFAULT_REVIEW_ROOT, main
+
+    private_root = tmp_path / ".private" / "exercise-media"
+    private_hack_squat = private_root / "hack_squat"
+    private_hack_squat.mkdir(parents=True)
+    image(private_hack_squat / "source-start.png", "red", (760, 760))
+    image(private_hack_squat / "source-end.png", "blue", (760, 760))
+
+    output_dir = DEFAULT_REVIEW_ROOT / f"_test-{tmp_path.name}"
+    output_dir.mkdir(parents=True)
+    image(output_dir / "generated-start-raw.png", "green", (760, 760))
+    image(output_dir / "generated-end-raw.png", "yellow", (760, 760))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_identity_pilot_review.py",
+            "--private-root",
+            str(private_root),
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+    try:
+        assert main() == 0
+        assert (output_dir / "generated-start.png").is_file()
+        assert (output_dir / "generated-end.png").is_file()
+        assert (output_dir / "hack_squat-comparison.png").is_file()
+        assert (output_dir / "hack_squat-card.png").is_file()
+        assert {path.name for path in private_hack_squat.iterdir()} == {
+            "source-start.png",
+            "source-end.png",
+        }
+    finally:
+        shutil.rmtree(output_dir)

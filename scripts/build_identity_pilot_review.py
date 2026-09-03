@@ -20,9 +20,10 @@ DEFAULT_REVIEW_ROOT = ROOT / "review" / "local-ai-pilot"
 
 def normalize_generated_phase(generated: Path, source: Path, output: Path) -> Path:
     with Image.open(source) as source_image, Image.open(generated) as generated_image:
-        source_ratio = source_image.width / source_image.height
-        generated_ratio = generated_image.width / generated_image.height
-        if abs(source_ratio - generated_ratio) > 0.001:
+        if (
+            source_image.width * generated_image.height
+            != generated_image.width * source_image.height
+        ):
             raise ValueError("generated phase changed the source aspect ratio")
         normalized = generated_image.convert("RGB").resize(
             source_image.size, Image.Resampling.LANCZOS
@@ -100,14 +101,14 @@ def main() -> int:
     output_dir = validate_output_dir(args.output_dir)
     source_dir = args.private_root / "hack_squat"
     generated_start = normalize_generated_phase(
-        source_dir / "generated-start-raw.png",
+        output_dir / "generated-start-raw.png",
         source_dir / "source-start.png",
-        source_dir / "generated-start.png",
+        output_dir / "generated-start.png",
     )
     generated_end = normalize_generated_phase(
-        source_dir / "generated-end-raw.png",
+        output_dir / "generated-end-raw.png",
         source_dir / "source-end.png",
-        source_dir / "generated-end.png",
+        output_dir / "generated-end.png",
     )
     build_comparison(
         source_dir / "source-start.png",
