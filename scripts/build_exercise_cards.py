@@ -198,6 +198,14 @@ class CardSpec:
     attribution: str
 
 
+@dataclass(frozen=True, slots=True)
+class SinglePhotoCardSpec:
+    title: str
+    image: Path
+    hint: str
+    attribution: str
+
+
 def _font(size: int) -> ImageFont.FreeTypeFont:
     if not FONT_PATH.is_file():
         raise FileNotFoundError(f"vendored card font is missing: {FONT_PATH}")
@@ -342,18 +350,68 @@ def render_card(spec: CardSpec, output: Path) -> None:
     canvas.save(output, format="PNG", optimize=True, compress_level=9)
 
 
-def card_spec_for(pair: SourcePair, source_dir: Path) -> CardSpec:
-    labels = (
-        ("Настройка", "Рабочее положение")
-        if pair.cardio
-        else ("Исходное положение", "Конечное положение")
+def render_single_photo_card(spec: SinglePhotoCardSpec, output: Path) -> None:
+    canvas = Image.new("RGB", CANVAS_SIZE, BACKGROUND)
+    draw = ImageDraw.Draw(canvas)
+    title_font = _font(48)
+    hint_font = _font(30)
+    attribution_font = _font(21)
+    image_box = (48, 125, CANVAS_SIZE[0] - 48, 1010)
+    image_width = image_box[2] - image_box[0]
+    image_height = image_box[3] - image_box[1]
+
+    draw.text(
+        (CANVAS_SIZE[0] // 2, 35),
+        spec.title,
+        font=title_font,
+        fill=TEXT_COLOR,
+        anchor="ma",
     )
+    with Image.open(spec.image) as source:
+        photo = ImageOps.fit(
+            source.convert("RGB"),
+            (image_width, image_height),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+    canvas.paste(photo, image_box[:2])
+    draw.rectangle(image_box, outline=BORDER_COLOR, width=2)
+    hint_lines = _wrap_two_lines(draw, spec.hint, hint_font, image_width - 64)
+    _draw_centered_lines(
+        draw,
+        hint_lines,
+        center_x=CANVAS_SIZE[0] // 2,
+        top=1045,
+        font=hint_font,
+    )
+    draw.text(
+        (CANVAS_SIZE[0] // 2, 1210),
+        spec.attribution,
+        font=attribution_font,
+        fill=TEXT_COLOR,
+        anchor="ma",
+    )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(output, format="PNG", optimize=True, compress_level=9)
+
+
+def card_spec_for(
+    pair: SourcePair, source_dir: Path
+) -> CardSpec | SinglePhotoCardSpec:
+    if pair.cardio:
+        return SinglePhotoCardSpec(
+            title=pair.title,
+            image=source_dir / "start.jpg",
+            hint=f"{pair.start_hint}. {pair.end_hint}",
+            attribution="free-exercise-db · Unlicense",
+        )
     return CardSpec(
         title=pair.title,
         start_image=source_dir / "start.jpg",
         end_image=source_dir / "end.jpg",
-        start_label=labels[0],
-        end_label=labels[1],
+        start_label="Исходное положение",
+        end_label="Конечное положение",
         start_hint=pair.start_hint,
         end_hint=pair.end_hint,
         attribution="free-exercise-db · Unlicense",
@@ -558,7 +616,11 @@ def build_candidate_cards(
             exercise_source_ids.append(source_id)
 
         output = asset_dir / f"{pair.code}.png"
-        render_card(card_spec_for(pair, copied_dir), output)
+        card_spec = card_spec_for(pair, copied_dir)
+        if isinstance(card_spec, SinglePhotoCardSpec):
+            render_single_photo_card(card_spec, output)
+        else:
+            render_card(card_spec, output)
         raw_exercise.update(
             {
                 "card": output.name,
@@ -764,7 +826,6 @@ def validate_sources(
 
     referenced_source_ids: set[str] = set()
     local_paths: set[str] = set()
-    source_urls: set[str] = set()
     for code, raw_exercise in exercises.items():
         if not isinstance(code, str) or not code or not isinstance(raw_exercise, dict):
             raise ValueError("exercise manifest entry is malformed")
@@ -790,17 +851,16 @@ def validate_sources(
             if source_id in referenced_source_ids:
                 raise ValueError(f"exercise source id is referenced more than once: {source_id}")
             referenced_source_ids.add(source_id)
-            local_path, source_url = _validate_source_record(
+            local_path, _ = _validate_source_record(
                 source_id=source_id,
                 record=sources.get(source_id),
                 expected_role=role,
                 licenses=licenses,
                 media_root=media_root,
             )
-            if local_path in local_paths or source_url in source_urls:
+            if local_path in local_paths:
                 raise ValueError(f"duplicate exercise source record: {source_id}")
             local_paths.add(local_path)
-            source_urls.add(source_url)
         _validate_card(code, raw_exercise, asset_dir)
 
     if set(sources) != referenced_source_ids:

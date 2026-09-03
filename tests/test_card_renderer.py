@@ -77,6 +77,65 @@ def test_render_card_has_fixed_size_and_is_deterministic(tmp_path):
     assert sha256(first) == sha256(second)
 
 
+def test_render_single_photo_card_has_no_artificial_phases(tmp_path, monkeypatch):
+    from scripts.build_exercise_cards import (
+        SinglePhotoCardSpec,
+        render_single_photo_card,
+    )
+
+    photo = solid_image(tmp_path / "cardio.jpg", (640, 480), "green")
+    spec = SinglePhotoCardSpec(
+        title="Ходьба на дорожке",
+        image=photo,
+        hint="Иди в разговорном темпе, не держась за поручни",
+        attribution="Источник · Лицензия",
+    )
+    drawn_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def recording_text(draw, xy, text, *args, **kwargs):
+        drawn_text.append(text)
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", recording_text)
+    first = tmp_path / "single-1.png"
+    second = tmp_path / "single-2.png"
+
+    render_single_photo_card(spec, first)
+    render_single_photo_card(spec, second)
+
+    assert sha256(first) == sha256(second)
+    with Image.open(first) as image:
+        assert image.size == (1254, 1254)
+        assert image.mode == "RGB"
+        red, green, blue = image.getpixel((627, 550))
+        assert green > red and green > blue
+    assert "Исходное положение" not in drawn_text
+    assert "Конечное положение" not in drawn_text
+    assert "Настройка" not in drawn_text
+    assert "Рабочее положение" not in drawn_text
+
+
+def test_card_spec_for_cardio_uses_one_photo_and_one_hint(tmp_path):
+    from scripts.build_exercise_cards import (
+        SOURCE_PAIRS,
+        SinglePhotoCardSpec,
+        card_spec_for,
+    )
+
+    pair = next(item for item in SOURCE_PAIRS if item.code == "cardio_treadmill")
+    source_dir = tmp_path / pair.code
+    source_dir.mkdir()
+    start = solid_image(source_dir / "start.jpg", (220, 180), "green")
+    solid_image(source_dir / "end.jpg", (220, 180), "blue")
+
+    spec = card_spec_for(pair, source_dir)
+
+    assert isinstance(spec, SinglePhotoCardSpec)
+    assert spec.image == start
+    assert spec.hint == "Выпрямись и начни с ходьбы. Двигайся в разговорном темпе"
+
+
 def test_render_card_uses_a_centered_crop(tmp_path):
     from scripts.build_exercise_cards import CardSpec, render_card
 
@@ -493,8 +552,8 @@ def test_project_review_sheet_covers_every_required_code_exactly_once(tmp_path):
     assert set(codes) == expected_codes
     assert len(codes) == len(expected_codes)
     glute = next(item for item in items if item.code == "glute_kickback")
-    assert glute.status == "text_only"
-    assert glute.card is None
-    assert not (asset_dir / "glute_kickback.png").exists()
+    assert glute.status == "approved"
+    assert glute.card == asset_dir / "glute_kickback.png"
+    assert glute.card.exists()
     with Image.open(output) as sheet:
         assert sheet.size == (1128, 1968)

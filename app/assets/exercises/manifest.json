@@ -7,6 +7,11 @@
       "repository_revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
       "license": "Unlicense",
       "license_url": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md"
+    },
+    "openai-imagegen-user-approved": {
+      "provider": "openai-imagegen-user-approved",
+      "license": "User-authorized project use",
+      "license_url": "https://openai.com/policies/terms-of-use/"
     }
   },
   "sources": {
@@ -373,13 +378,37 @@
       "sha256": "8819cc3e699ff1d0b5d18c21a411a0e380fc0f316e83d9dcaa1207617f78ea23",
       "role": "end",
       "verified_at": "2026-09-02"
+    },
+    "openai-imagegen-user-approved:glute_kickback:start": {
+      "provider": "openai-imagegen-user-approved",
+      "source_url": "https://openai.com/index/image-generation-api/",
+      "local_path": "media_sources/exercises/glute_kickback/start.png",
+      "author": "OpenAI ImageGen; user-approved output",
+      "license": "User-authorized project use",
+      "license_url": "https://openai.com/policies/terms-of-use/",
+      "sha256": "5a0a5ef2ed378bb315d6dc5e4b65fed4b1892674973163d57a5ec9990e2572ba",
+      "role": "start",
+      "verified_at": "2026-09-03",
+      "user_approved": true
+    },
+    "openai-imagegen-user-approved:glute_kickback:end": {
+      "provider": "openai-imagegen-user-approved",
+      "source_url": "https://openai.com/index/image-generation-api/",
+      "local_path": "media_sources/exercises/glute_kickback/end.png",
+      "author": "OpenAI ImageGen; user-approved output",
+      "license": "User-authorized project use",
+      "license_url": "https://openai.com/policies/terms-of-use/",
+      "sha256": "5676c7701381856528d94580b19235625e1bc7ceea6ee5832f02d321691a6485",
+      "role": "end",
+      "verified_at": "2026-09-03",
+      "user_approved": true
     }
   },
   "exercises": {
     "cardio_treadmill": {
       "card": "cardio_treadmill.png",
-      "status": "candidate",
-      "sha256": "159a7321490318f0263c3eeca394fe6187136b2c931e55b284408ec860c26d81",
+      "status": "approved",
+      "sha256": "962cc7de6756defa737c286c29fb6fe1f3e063d5152d4ed3f6b4cdc38cec0117",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Walking_Treadmill/1.jpg"
@@ -387,8 +416,8 @@
     },
     "cardio_elliptical": {
       "card": "cardio_elliptical.png",
-      "status": "candidate",
-      "sha256": "100de1b218b2d6b036dae5eab72e1b5e8b193cd10afab386f8980ca3eda25774",
+      "status": "approved",
+      "sha256": "9af75ef2caf1e6953b444f80bab6afbe163ede51a24f52cc84fd06b0e8f63c6d",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Elliptical_Trainer/1.jpg"
@@ -396,8 +425,8 @@
     },
     "cardio_bike": {
       "card": "cardio_bike.png",
-      "status": "candidate",
-      "sha256": "c00e7e517d2bb3bf788ce9108c72af61837c3947e50271b098cd4eebc8ac77c0",
+      "status": "approved",
+      "sha256": "268fececeaf3f83e6632a8c5dfb1994e80c0eddd6b9a578de567d2007cb8b893",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Bicycling_Stationary/1.jpg"
@@ -405,23 +434,26 @@
     },
     "seated_leg_curl": {
       "card": "seated_leg_curl.png",
-      "status": "candidate",
-      "sha256": "4b42ad67ba1089434f178956bd9684c17253b17f76a25e121aa02ba03f57af72",
+      "status": "approved",
+      "sha256": "d2f22edec379182bb4496c10ab209d892af4c8fc966d0221e94f529c4b511f96",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Leg_Curl/1.jpg"
       ]
     },
     "glute_kickback": {
-      "card": null,
-      "status": "text_only",
-      "sha256": null,
-      "source_ids": []
+      "card": "glute_kickback.png",
+      "status": "approved",
+      "sha256": "2ad4d486b4a929bb06e7fa6b743a8271f2c8fd2b3237fe4f10c157f318777d8e",
+      "source_ids": [
+        "openai-imagegen-user-approved:glute_kickback:start",
+        "openai-imagegen-user-approved:glute_kickback:end"
+      ]
     },
     "hip_abduction": {
       "card": "hip_abduction.png",
-      "status": "candidate",
-      "sha256": "78ddde2d76c556e9d8f5509ff897166c2725e2492416520159f1da1ff0f042e6",
+      "status": "approved",
+      "sha256": "c706f1865d692479700c724417d75c91f3ec8b81bbb65e4a49e5d3f5841da2e4",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Abductor/1.jpg"
@@ -429,8 +461,8 @@
     },
     "lat_pulldown": {
       "card": "lat_pulldown.png",
-      "status": "candidate",
-      "sha256": "d61539c878e94049fa92f537136f8342bf6f00abdb748931c2b4c063aa8ea798",
+      "status": "approved",
+      "sha256": "d3ab8f874f5a61fb4b2f7afa18432c98306c7975ea9b48067fdf9fc7c44e3e04",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Wide-Grip_Lat_Pulldown/1.jpg"
@@ -438,8 +470,8 @@
     },
     "chest_press": {
       "card": "chest_press.png",
-      "status": "candidate",
-      "sha256": "61402e7d42926dd0cd96c0b9fde19a86382944f0bbb9e2cccec06a45179a61fe",
+      "status": "approved",
+      "sha256": "5d3bf2a0211f21320a7c3ed432e8166f3be5145044dae7da6fc924a5b150c29e",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Chest_Press/1.jpg"
@@ -447,8 +479,8 @@
     },
     "hack_squat": {
       "card": "hack_squat.png",
-      "status": "candidate",
-      "sha256": "eec928858793c8d4ebfaf8b118feee84b750b741f01cb5220ecc1e2d74cbbe62",
+      "status": "approved",
+      "sha256": "39f87bd7b6c5f49382bc9369c5f98023fb1b09ffddccb7ba71037a8a2ed59bb9",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Hack_Squat/1.jpg"
@@ -456,8 +488,8 @@
     },
     "leg_extension": {
       "card": "leg_extension.png",
-      "status": "candidate",
-      "sha256": "3b54e14b792480a39f66ad2a1387d4e71a5c5e2e5f349f485b64d2325374f379",
+      "status": "approved",
+      "sha256": "f4dc812ece911be8c32554f8eee6ab43e718f2715889a7b6f06db457406fb7e1",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Extensions/1.jpg"
@@ -465,8 +497,8 @@
     },
     "hip_adduction": {
       "card": "hip_adduction.png",
-      "status": "candidate",
-      "sha256": "048c19bc99cca593109260a8ca3c2449abd37e49b0b3ffbe6cc284b76d470ba4",
+      "status": "approved",
+      "sha256": "5a50c362938170161a789bbbeabad1ef350e3009875384aaa25f0580e99406be",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Thigh_Adductor/1.jpg"
@@ -474,8 +506,8 @@
     },
     "seated_row": {
       "card": "seated_row.png",
-      "status": "candidate",
-      "sha256": "42278d13385c5e72e3ca5bdece4c8ede16a73822a70948c1b1cc713aef2b079a",
+      "status": "approved",
+      "sha256": "ad417d8deadbc3175753b4ee49c535f1d7f75050527a9df219b8fb5a2312b4ee",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Seated_Cable_Rows/1.jpg"
@@ -483,8 +515,8 @@
     },
     "leg_press": {
       "card": "leg_press.png",
-      "status": "candidate",
-      "sha256": "db23a2d5f6bb8652c14f7fee78003421ad9cdaf214d83dcf355a6f608adc2674",
+      "status": "approved",
+      "sha256": "2c374afe3cdac256f50b53e2ea6b55a944bdb8ca8a6979f7b00acb2a597afed7",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/1.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leg_Press/0.jpg"
@@ -492,8 +524,8 @@
     },
     "machine_shoulder_press": {
       "card": "machine_shoulder_press.png",
-      "status": "candidate",
-      "sha256": "a11bd1120a410b30207ef3542e8fb0978d220b2086c584ac49d1731046680643",
+      "status": "approved",
+      "sha256": "89b8aa89720b15d04ef3476e0c3369995bef41cc1d155661a520adde04cea56a",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/0.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Leverage_Shoulder_Press/1.jpg"
@@ -501,8 +533,8 @@
     },
     "pec_deck": {
       "card": "pec_deck.png",
-      "status": "candidate",
-      "sha256": "4fa520dba65577bec5092349228714c8bac36649d98f49d0e7f018d27105e35f",
+      "status": "approved",
+      "sha256": "2c7830994be59298069308de9a114d3673a165b21ab9e9b2134302d7007f187a",
       "source_ids": [
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/1.jpg",
         "free-exercise-db:a859101d633a01c4a1a920d6a8ce41dabba0705f:exercises/Butterfly/0.jpg"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
@@ -49,6 +50,17 @@ def batch_paths(tmp_path):
     )
     asset_dir = manifest_path.parent
     media_root = tmp_path / "media_sources"
+    glute_source_dir = media_root / "exercises" / "glute_kickback"
+    glute_source_dir.mkdir(parents=True)
+    for filename in ("start.png", "end.png"):
+        shutil.copyfile(
+            ROOT / "media_sources" / "exercises" / "glute_kickback" / filename,
+            glute_source_dir / filename,
+        )
+    shutil.copyfile(
+        ROOT / "app" / "assets" / "exercises" / "glute_kickback.png",
+        asset_dir / "glute_kickback.png",
+    )
     args = [
         "--manifest",
         str(manifest_path),
@@ -270,7 +282,7 @@ def test_approved_manifest_rejects_unsafe_or_incomplete_entries(
         asset_for("seated_row")
 
 
-def test_initial_manifest_covers_all_reachable_v4_exercises():
+def test_production_manifest_approves_all_reachable_v4_exercises():
     expected_codes = {
         "cardio_treadmill",
         "cardio_elliptical",
@@ -290,17 +302,10 @@ def test_initial_manifest_covers_all_reachable_v4_exercises():
     }
 
     assets = {code: asset_for(code) for code in expected_codes}
-    glute_card = ROOT / "app" / "assets" / "exercises" / "glute_kickback.png"
-
     assert all(asset is not None for asset in assets.values())
-    assert assets["glute_kickback"].status == "text_only"
-    assert not glute_card.exists()
-    assert card_path_for("glute_kickback") is None
-    assert all(
-        assets[code].status == "candidate"
-        for code in expected_codes - {"glute_kickback"}
-    )
-    assert all(card_path_for(code) is None for code in expected_codes)
+    assert all(assets[code].status == "approved" for code in expected_codes)
+    assert all(card_path_for(code) is not None for code in expected_codes)
+    assert approved_asset_codes() == expected_codes
 
 
 def test_public_domain_sources_match_pinned_upstream_bytes_and_phase_roles():
@@ -312,8 +317,8 @@ def test_public_domain_sources_match_pinned_upstream_bytes_and_phase_roles():
 
     assert manifest["licenses"]["free-exercise-db"]["license"] == "Unlicense"
     assert manifest["licenses"]["free-exercise-db"]["repository_revision"] == PINNED_REVISION
-    assert len(manifest["sources"]) == 28
-    assert len(set(manifest["sources"])) == 28
+    assert len(manifest["sources"]) == 30
+    assert len(set(manifest["sources"])) == 30
     licenses_text = (ROOT / "media_sources" / "LICENSES.md").read_text(encoding="utf-8")
     assert f"Pinned revision: `{PINNED_REVISION}`" in licenses_text
     assert (SOURCE_REPO / "LICENSE.md").read_text(encoding="utf-8").strip() in licenses_text
@@ -354,7 +359,7 @@ def test_public_domain_sources_match_pinned_upstream_bytes_and_phase_roles():
         with Image.open(card) as image:
             assert image.size == (1254, 1254)
         assert manifest["exercises"][code]["card"] == f"{code}.png"
-        assert manifest["exercises"][code]["status"] == "candidate"
+        assert manifest["exercises"][code]["status"] == "approved"
         assert manifest["exercises"][code]["sha256"] == hashlib.sha256(
             card.read_bytes()
         ).hexdigest()
@@ -373,8 +378,8 @@ def test_batch_cli_builds_deterministically_and_keeps_incomplete_approval_gate(
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in asset_dir.glob("*.png")
     }
-    assert len(first_cards) == 14
-    assert "glute_kickback.png" not in first_cards
+    assert len(first_cards) == 15
+    assert "glute_kickback.png" in first_cards
     assert main(["--validate-sources", *common_args]) == 0
 
     (asset_dir / "leg_press.png").write_bytes(b"tampered candidate")
@@ -399,6 +404,11 @@ def test_base_rebuild_preserves_and_validates_a_second_provider_glute_pair(tmp_p
     start, end, card = add_glute_card(asset_dir, media_root)
     license_record, source_records = second_provider_glute_records(start, end)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sources"] = {
+        source_id: record
+        for source_id, record in manifest["sources"].items()
+        if record["provider"] == "free-exercise-db"
+    }
     source_ids = list(source_records)
     stale_source_id = (
         "free-exercise-db:0000000000000000000000000000000000000000:"

@@ -39,3 +39,12 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <https://unlicense.org>
 ```
 <!-- END managed free-exercise-db license -->
+
+## User-approved ImageGen output
+
+- Provider: OpenAI ImageGen
+- Use: approved by the user for this private Telegram fitness bot
+- Terms: https://openai.com/policies/terms-of-use/
+
+The generated start and end phases for `glute_kickback` were reviewed and approved
+by the user on 2026-09-03. Personal identity reference photographs are not stored here.
