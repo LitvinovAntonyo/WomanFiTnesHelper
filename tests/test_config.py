@@ -25,3 +25,13 @@ def test_reset_button_setting_can_be_disabled_from_environment(monkeypatch):
     settings = Settings(_env_file=None)
 
     assert settings.show_reset_button is False
+
+
+def test_gift_mode_settings_are_loaded_from_environment(monkeypatch):
+    monkeypatch.setenv("CLAIM_FIRST_USER", "true")
+    monkeypatch.setenv("GIFT_RECIPIENT_NAME", "Ангелина")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.claim_first_user is True
+    assert settings.gift_recipient_name == "Ангелина"

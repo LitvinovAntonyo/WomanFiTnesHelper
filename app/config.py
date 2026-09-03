@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = SecretStr("")
     admin_telegram_id: int | None = None
     allowed_telegram_ids: list[int] = Field(default_factory=list)
+    claim_first_user: bool = False
+    gift_recipient_name: str = ""
 
     database_url: str = "sqlite+aiosqlite:///data/fitness_bot.sqlite3"
     timezone: str = "Asia/Yekaterinburg"

@@ -49,6 +49,7 @@ def test_pre_workout_motivations_are_varied_and_do_not_mention_lead_time():
     assert len(set(PRE_WORKOUT_MOTIVATIONS)) == 20
     assert all("два часа" not in text.lower() for text in PRE_WORKOUT_MOTIVATIONS)
     assert all("120 минут" not in text.lower() for text in PRE_WORKOUT_MOTIVATIONS)
+    assert any("Я Ангелина" in text for text in PRE_WORKOUT_MOTIVATIONS)
 
     workout_at = local_to_utc_naive(datetime.fromisoformat("2026-09-07T19:00:00+05:00"))
     assert pre_workout_motivation_text(workout_at, "Asia/Yekaterinburg") in (

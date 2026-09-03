@@ -155,6 +155,50 @@ async def test_start_and_complete_onboarding_through_dispatcher(app_services):
 
 
 @pytest.mark.asyncio
+async def test_gift_recipient_is_greeted_by_name_and_skips_name_input(app_services):
+    settings, database, users, workouts, progress, _ = app_services
+    settings.gift_recipient_name = "Ангелина"
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(
+        settings=settings,
+        database=database,
+        bot=bot,
+        users=users,
+        workouts=workouts,
+        progress=progress,
+        reminders=reminders,
+        llm=llm,
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+
+    updates = [
+        user_message(101, "/start"),
+        callback_update(102, "onboarding:days_done"),
+        user_message(103, "19:00"),
+        callback_update(104, "onboarding:frequency:3"),
+        callback_update(105, "onboarding:place:gym"),
+        callback_update(106, "onboarding:goal:regularity"),
+        callback_update(107, "onboarding:experience:returning"),
+    ]
+    for update in updates:
+        await dispatcher.feed_update(bot, update)
+
+    user = await users.get_by_telegram_id(10001)
+    assert user is not None
+    assert user.onboarding_complete
+    assert user.display_name == "Ангелина"
+    sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
+    assert any("Привет, Ангелина!" in text for text in sent_texts)
+    assert not any("Как тебя называть" in text for text in sent_texts)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
 async def test_schedule_edit_warns_about_consecutive_days_without_blocking(app_services, onboarded_user):
     settings, database, users, workouts, progress, _ = app_services
     session = RecordingSession()

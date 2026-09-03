@@ -99,8 +99,12 @@ LLM_MODEL=openai/gpt-oss-20b
 LLM_API_KEY=<локально сохранённый ключ>
 ```
 
-Обязательно задать `ALLOWED_TELEGRAM_IDS` (ID жены) и `ADMIN_TELEGRAM_ID`. Если whitelist
-пуст, бот принимает любого пользователя, который знает его username.
+Обычный закрытый режим использует `ALLOWED_TELEGRAM_IDS` и `ADMIN_TELEGRAM_ID`. Для
+подарочной передачи можно очистить оба значения, включить `CLAIM_FIRST_USER=true` и при
+необходимости задать `GIFT_RECIPIENT_NAME`. Тогда первый человек, открывший `/start`,
+становится единственным пользователем, а вопрос об имени пропускается. Если whitelist
+пуст и `CLAIM_FIRST_USER=false`, бот принимает любого пользователя, который знает его
+username.
 
 ## Тесты
 

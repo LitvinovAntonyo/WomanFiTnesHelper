@@ -72,7 +72,7 @@ async def run() -> None:
         llm=llm,
     )
     dispatcher = Dispatcher()
-    dispatcher.update.outer_middleware(AuthorizationMiddleware(settings))
+    dispatcher.update.outer_middleware(AuthorizationMiddleware(settings, database))
     dispatcher.include_routers(*build_routers(context))
 
     @dispatcher.errors()

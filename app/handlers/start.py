@@ -50,6 +50,17 @@ def build_start_router(context: AppContext) -> Router:
                 reply_markup=menu_keyboard(context.settings.show_reset_button),
             )
             return
+        recipient_name = context.settings.gift_recipient_name.strip()[:100]
+        if recipient_name:
+            await state.update_data(name=recipient_name, days=[0, 2, 4])
+            await state.set_state(Onboarding.days)
+            await message.answer(
+                f"Привет, {recipient_name}! Этот бот — небольшой подарок для твоих "
+                "тренировок. Давай настроим его под тебя.\n\n"
+                "В какие дни удобно заниматься? Можно выбрать несколько.",
+                reply_markup=days_keyboard([0, 2, 4]),
+            )
+            return
         await state.set_state(Onboarding.name)
         await message.answer(
             "Привет! Я помогу спокойно вернуть регулярность тренировок — без давления и чувства вины.\n\nКак тебя называть?",
