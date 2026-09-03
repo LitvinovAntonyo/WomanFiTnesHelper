@@ -290,9 +290,12 @@ def test_initial_manifest_covers_all_reachable_v4_exercises():
     }
 
     assets = {code: asset_for(code) for code in expected_codes}
+    glute_card = ROOT / "app" / "assets" / "exercises" / "glute_kickback.png"
 
     assert all(asset is not None for asset in assets.values())
     assert assets["glute_kickback"].status == "text_only"
+    assert not glute_card.exists()
+    assert card_path_for("glute_kickback") is None
     assert all(
         assets[code].status == "candidate"
         for code in expected_codes - {"glute_kickback"}
@@ -371,6 +374,7 @@ def test_batch_cli_builds_deterministically_and_keeps_incomplete_approval_gate(
         for path in asset_dir.glob("*.png")
     }
     assert len(first_cards) == 14
+    assert "glute_kickback.png" not in first_cards
     assert main(["--validate-sources", *common_args]) == 0
 
     (asset_dir / "leg_press.png").write_bytes(b"tampered candidate")
