@@ -11,7 +11,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.methods import SendPhoto, TelegramMethod
-from aiogram.types import CallbackQuery, Chat, Message, Update
+from aiogram.types import CallbackQuery, Chat, FSInputFile, Message, Update
 from aiogram.types import User as TelegramUser
 from sqlalchemy import func, select
 
@@ -329,6 +329,36 @@ async def test_photo_send_failure_falls_back_to_text_and_actions(
         for button in row
     ]
     assert any(value.startswith("exercise:set:") for value in callbacks)
+    await llm.close()
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_changed_card_bypasses_legacy_telegram_file_id(
+    app_services, onboarded_user, monkeypatch, tmp_path
+):
+    settings, database, users, workouts, progress, _ = app_services
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+    card = tmp_path / "approved-card.png"
+    card.write_bytes(b"new-card")
+    monkeypatch.setattr(workout_module, "card_path_for", lambda _code: card)
+    await workouts.remember_media_file_id("cardio_treadmill", "OLD_FILE_ID")
+    workout = await workouts.active_or_new(10001)
+    await workouts.choose_cardio(workout.id, 10001, "cardio_treadmill")
+    await workouts.begin(workout.id, 10001)
+
+    await dispatcher.feed_update(
+        bot, callback_update(701, f"cardio:select:{workout.id}:cardio_treadmill")
+    )
+
+    sent_photo = next(method for method in session.methods if isinstance(method, SendPhoto))
+    assert isinstance(sent_photo.photo, FSInputFile)
     await llm.close()
     await bot.session.close()
 

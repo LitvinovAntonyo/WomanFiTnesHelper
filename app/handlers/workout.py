@@ -18,7 +18,7 @@ from aiogram.types import (
 )
 
 from app.context import AppContext
-from app.exercise_assets import card_path_for
+from app.exercise_assets import asset_key_for, card_path_for
 from app.exercise_library import (
     CARDIO_CODES,
     CARDIO_LABELS,
@@ -395,7 +395,8 @@ def build_workout_router(context: AppContext) -> Router:
             return
         image_path = card_path_for(step.exercise.code)
         if image_path is not None:
-            cached_file_id = await context.workouts.media_file_id(step.exercise.code)
+            media_asset_key = asset_key_for(step.exercise.code)
+            cached_file_id = await context.workouts.media_file_id(media_asset_key)
             try:
                 sent = await message.answer_photo(
                     cached_file_id or FSInputFile(image_path), caption=step_caption(step)
@@ -403,7 +404,7 @@ def build_workout_router(context: AppContext) -> Router:
                 photos = getattr(sent, "photo", None)
                 if not cached_file_id and photos:
                     await context.workouts.remember_media_file_id(
-                        step.exercise.code, photos[-1].file_id
+                        media_asset_key, photos[-1].file_id
                     )
             except (TelegramAPIError, OSError):
                 await message.answer(step_caption(step))

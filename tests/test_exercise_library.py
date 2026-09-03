@@ -35,6 +35,26 @@ def test_every_template_exercise_has_guidance():
     assert set(CARDIO_CODES) <= set(EXERCISE_GUIDANCE)
 
 
+def test_library_contains_only_current_v4_exercises():
+    assert set(EXERCISE_GUIDANCE) == {
+        "cardio_treadmill",
+        "cardio_elliptical",
+        "cardio_bike",
+        "seated_leg_curl",
+        "glute_kickback",
+        "leg_extension",
+        "hip_abduction",
+        "hip_adduction",
+        "leg_press",
+        "lat_pulldown",
+        "chest_press",
+        "machine_shoulder_press",
+        "pec_deck",
+        "seated_row",
+        "hack_squat",
+    }
+
+
 def test_machine_replacements_have_local_guidance():
     assert EXERCISE_ALTERNATIVES["leg_press"] == "hack_squat"
     assert EXERCISE_ALTERNATIVES["hack_squat"] == "leg_press"

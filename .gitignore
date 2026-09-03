@@ -11,5 +11,6 @@ data/*.sqlite3-*
 logs/*.log*
 .DS_Store
 .private/exercise-media/
+.private/legacy-assets/
 review/local-ai-pilot/
 review/local-ai-series/
