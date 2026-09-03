@@ -27,7 +27,7 @@ from app.exercise_library import (
     repetitions_text,
     rest_seconds_for,
 )
-from app.keyboards import RESET_TODAY_TEXT, menu_keyboard
+from app.keyboards import RESET_TODAY_TEXT, menu_keyboard, text_input_reply
 from app.models import WorkoutSession
 from app.services.scheduler import local_to_utc_naive, utc_naive_to_local
 from app.services.workouts import SetLogState, WorkoutStep
@@ -582,7 +582,10 @@ def build_workout_router(context: AppContext) -> Router:
             if callback.message:
                 with suppress(Exception):
                     await callback.message.edit_reply_markup(reply_markup=None)
-                await callback.message.answer(SET_INPUT_HINT)
+                await callback.message.answer(
+                    SET_INPUT_HINT,
+                    reply_markup=text_input_reply("Например: 25 12"),
+                )
             await callback.answer()
             return
 
@@ -617,7 +620,10 @@ def build_workout_router(context: AppContext) -> Router:
         if callback.message:
             with suppress(Exception):
                 await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer(SET_INPUT_HINT)
+            await callback.message.answer(
+                SET_INPUT_HINT,
+                reply_markup=text_input_reply("Например: 25 12"),
+            )
         await callback.answer()
 
     @router.message(WorkoutInput.set_result, F.text)
@@ -626,7 +632,10 @@ def build_workout_router(context: AppContext) -> Router:
         try:
             weight_kg, reps = parse_set_input(message.text or "")
         except ValueError:
-            await message.answer(SET_INPUT_HINT)
+            await message.answer(
+                SET_INPUT_HINT,
+                reply_markup=text_input_reply("Например: 25 12"),
+            )
             return
         data = await state.get_data()
         result_id = data.get("result_id")
@@ -942,7 +951,10 @@ def build_workout_router(context: AppContext) -> Router:
         await state.set_state(RescheduleInput.date_time)
         await state.update_data(reminder_id=reminder_id)
         if callback.message:
-            await callback.message.answer("Напиши новую дату и время: ДД.ММ ЧЧ:ММ, например 05.09 19:30.")
+            await callback.message.answer(
+                "Напиши новую дату и время: ДД.ММ ЧЧ:ММ, например 05.09 19:30.",
+                reply_markup=text_input_reply("Например: 05.09 19:30"),
+            )
         await callback.answer()
 
     @router.message(RescheduleInput.date_time, F.text)
@@ -957,7 +969,10 @@ def build_workout_router(context: AppContext) -> Router:
             if local_value <= now:
                 local_value = local_value.replace(year=now.year + 1)
         except ValueError:
-            await message.answer("Формат: ДД.ММ ЧЧ:ММ, например 05.09 19:30.")
+            await message.answer(
+                "Формат: ДД.ММ ЧЧ:ММ, например 05.09 19:30.",
+                reply_markup=text_input_reply("Например: 05.09 19:30"),
+            )
             return
         data = await state.get_data()
         try:

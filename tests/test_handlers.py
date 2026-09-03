@@ -11,7 +11,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.methods import SendPhoto, TelegramMethod
-from aiogram.types import CallbackQuery, Chat, FSInputFile, Message, Update
+from aiogram.types import CallbackQuery, Chat, ForceReply, FSInputFile, Message, Update
 from aiogram.types import User as TelegramUser
 from sqlalchemy import func, select
 
@@ -183,6 +183,13 @@ async def test_schedule_edit_warns_about_consecutive_days_without_blocking(app_s
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("Лучше оставить между ними день восстановления" in text for text in sent_texts)
     assert any("Новое время" in text for text in sent_texts)
+    time_prompt = next(
+        method
+        for method in session.methods
+        if "Новое время" in (getattr(method, "text", "") or "")
+    )
+    assert isinstance(time_prompt.reply_markup, ForceReply)
+    assert time_prompt.reply_markup.input_field_placeholder == "Например: 19:00"
     await llm.close()
     await bot.session.close()
 
@@ -265,6 +272,14 @@ async def test_workout_starts_with_cardio_choice_then_moves_set_by_set(
     assert any("запасом 3–4" in text for text in sent_texts)
     assert any("Заминка в программу не входит" in text for text in sent_texts)
     assert any("Напиши вес и повторения" in text for text in sent_texts)
+    set_prompt = next(
+        method
+        for method in session.methods
+        if "Напиши вес и повторения" in (getattr(method, "text", "") or "")
+    )
+    assert isinstance(set_prompt.reply_markup, ForceReply)
+    assert set_prompt.reply_markup.force_reply is True
+    assert set_prompt.reply_markup.input_field_placeholder == "Например: 25 12"
 
     await dispatcher.feed_update(
         bot, callback_update(26, f"exercise:repeat:{strength.result.id}")

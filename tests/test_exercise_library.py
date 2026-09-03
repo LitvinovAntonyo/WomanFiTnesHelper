@@ -20,7 +20,7 @@ from app.handlers.workout import (
     step_keyboard,
     step_text,
 )
-from app.keyboards import RESET_TODAY_TEXT, menu_keyboard
+from app.keyboards import RESET_TODAY_TEXT, menu_keyboard, text_input_reply
 from app.services.workouts import DEFAULT_TEMPLATES
 
 
@@ -201,6 +201,14 @@ def test_reset_button_can_be_hidden_from_main_menu():
         for button in row
     ]
     assert RESET_TODAY_TEXT not in labels
+
+
+def test_menu_points_to_buttons_and_explicit_input_uses_force_reply():
+    assert menu_keyboard().input_field_placeholder == "Выбирай действие кнопками"
+
+    reply = text_input_reply("Например: 25 12")
+    assert reply.force_reply is True
+    assert reply.input_field_placeholder == "Например: 25 12"
 
 
 def test_machine_rep_ranges_are_shown_in_plan_language():

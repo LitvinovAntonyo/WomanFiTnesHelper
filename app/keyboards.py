@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aiogram.types import (
+    ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -22,8 +23,12 @@ def menu_keyboard(show_reset_button: bool = True) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
         resize_keyboard=True,
-        input_field_placeholder="Напиши, если нужна поддержка",
+        input_field_placeholder="Выбирай действие кнопками",
     )
+
+
+def text_input_reply(placeholder: str) -> ForceReply:
+    return ForceReply(force_reply=True, input_field_placeholder=placeholder)
 
 
 def days_keyboard(selected: list[int], prefix: str = "onboarding") -> InlineKeyboardMarkup:

@@ -9,7 +9,13 @@ from aiogram.types import CallbackQuery, Message
 
 from app.context import AppContext
 from app.handlers.start import CONSECUTIVE_DAYS_WARNING, has_consecutive_days, valid_workout_time
-from app.keyboards import days_keyboard, frequency_keyboard, menu_keyboard, settings_keyboard
+from app.keyboards import (
+    days_keyboard,
+    frequency_keyboard,
+    menu_keyboard,
+    settings_keyboard,
+    text_input_reply,
+)
 from app.services.scheduler import utc_naive_to_local
 from app.states import ScheduleEdit
 
@@ -142,14 +148,20 @@ def build_menu_router(context: AppContext) -> Router:
             await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
         await state.set_state(ScheduleEdit.workout_time)
         if callback.message:
-            await callback.message.answer("Новое время в формате 19:00:")
+            await callback.message.answer(
+                "Новое время в формате 19:00:",
+                reply_markup=text_input_reply("Например: 19:00"),
+            )
         await callback.answer()
 
     @router.message(ScheduleEdit.workout_time, F.text)
     async def edit_time(message: Message, state: FSMContext) -> None:
         value = (message.text or "").strip()
         if not valid_workout_time(value):
-            await message.answer("Напиши время как 19:00, с 08:00 до 22:00.")
+            await message.answer(
+                "Напиши время как 19:00, с 08:00 до 22:00.",
+                reply_markup=text_input_reply("Например: 19:00"),
+            )
             return
         normalized = datetime.strptime(value, "%H:%M").strftime("%H:%M")
         data = await state.get_data()

@@ -8,7 +8,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.context import AppContext
-from app.keyboards import choices_keyboard, days_keyboard, frequency_keyboard, menu_keyboard
+from app.keyboards import (
+    choices_keyboard,
+    days_keyboard,
+    frequency_keyboard,
+    menu_keyboard,
+    text_input_reply,
+)
 from app.states import Onboarding
 
 CONSECUTIVE_DAYS_WARNING = (
@@ -46,7 +52,8 @@ def build_start_router(context: AppContext) -> Router:
             return
         await state.set_state(Onboarding.name)
         await message.answer(
-            "Привет! Я помогу спокойно вернуть регулярность тренировок — без давления и чувства вины.\n\nКак тебя называть?"
+            "Привет! Я помогу спокойно вернуть регулярность тренировок — без давления и чувства вины.\n\nКак тебя называть?",
+            reply_markup=text_input_reply("Например: Анна"),
         )
 
     @router.message(Command("cancel"))
@@ -61,7 +68,10 @@ def build_start_router(context: AppContext) -> Router:
     async def receive_name(message: Message, state: FSMContext) -> None:
         name = (message.text or "").strip()
         if not 1 <= len(name) <= 100:
-            await message.answer("Напиши короткое имя — до 100 символов.")
+            await message.answer(
+                "Напиши короткое имя — до 100 символов.",
+                reply_markup=text_input_reply("Например: Анна"),
+            )
             return
         await state.update_data(name=name, days=[0, 2, 4])
         await state.set_state(Onboarding.days)
@@ -95,14 +105,20 @@ def build_start_router(context: AppContext) -> Router:
             await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
         await state.set_state(Onboarding.workout_time)
         if callback.message:
-            await callback.message.answer("Во сколько обычно удобно? Напиши в формате 19:00.")
+            await callback.message.answer(
+                "Во сколько обычно удобно? Напиши в формате 19:00.",
+                reply_markup=text_input_reply("Например: 19:00"),
+            )
         await callback.answer()
 
     @router.message(Onboarding.workout_time, F.text)
     async def receive_time(message: Message, state: FSMContext) -> None:
         value = (message.text or "").strip()
         if not valid_workout_time(value):
-            await message.answer("Напиши время как 19:00. Допустимый диапазон — с 08:00 до 22:00.")
+            await message.answer(
+                "Напиши время как 19:00. Допустимый диапазон — с 08:00 до 22:00.",
+                reply_markup=text_input_reply("Например: 19:00"),
+            )
             return
         normalized = time.fromisoformat(value).strftime("%H:%M")
         data = await state.get_data()
