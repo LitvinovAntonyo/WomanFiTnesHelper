@@ -39,10 +39,14 @@ class Database:
     async def initialize(self) -> None:
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
-            # Version 3 is additive: create_all safely extends existing SQLite databases.
+            # Keep old reminder rows for session foreign keys and audit history.
             current_version = await connection.scalar(text("PRAGMA user_version"))
-            if int(current_version or 0) < 3:
-                await connection.execute(text("PRAGMA user_version=3"))
+            if int(current_version or 0) < 4:
+                await connection.execute(text(
+                    "UPDATE reminders SET status='superseded' "
+                    "WHERE status='pending' AND kind IN ('motivation','pre90','pre10')"
+                ))
+                await connection.execute(text("PRAGMA user_version=4"))
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

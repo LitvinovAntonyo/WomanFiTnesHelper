@@ -107,6 +107,52 @@ def workout_storage_key(bot: Bot) -> StorageKey:
     return StorageKey(bot_id=bot.id, chat_id=10001, user_id=10001)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("choice", ["quick", "custom", "skip"])
+async def test_daily_time_question_through_dispatcher(app_services, onboarded_user, monkeypatch, choice):
+    settings, database, users, workouts, progress, _ = app_services
+    now = datetime(2026, 9, 7, 7)
+    monkeypatch.setattr("app.services.scheduler.utc_now", lambda: now)
+    session = RecordingSession()
+    bot = Bot("123456:TEST_TOKEN", session=session)
+    reminders = ReminderService(database, settings, bot)
+    llm = build_llm_service(settings, database)
+    context = AppContext(settings, database, bot, users, workouts, progress, reminders, llm)
+    dispatcher = Dispatcher()
+    dispatcher.include_routers(*build_routers(context))
+    async with database.session() as db_session:
+        prompt = Reminder(user_id=onboarded_user.id, kind="daily_time", status="sent",
+                          scheduled_at=now, workout_at=now.replace(hour=23, minute=59))
+        db_session.add(prompt)
+        await db_session.flush()
+        prompt_id = prompt.id
+    if choice == "custom":
+        await dispatcher.feed_update(bot, callback_update(1900, f"daily:custom:{prompt_id}"))
+        assert isinstance(session.methods[0].reply_markup, ForceReply)
+        await dispatcher.feed_update(bot, user_message(1901, "ошибка"))
+        assert await dispatcher.storage.get_state(workout_storage_key(bot)) == "DailyTimeInput:clock"
+        await dispatcher.feed_update(bot, user_message(1902, "19:30"))
+        assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+    else:
+        if choice == "quick":
+            await dispatcher.feed_update(bot, callback_update(1899, f"daily:custom:{prompt_id}"))
+        data = f"daily:time:{prompt_id}:1900" if choice == "quick" else f"daily:skip:{prompt_id}"
+        await dispatcher.feed_update(bot, callback_update(1903, data))
+        assert await dispatcher.storage.get_state(workout_storage_key(bot)) is None
+        await dispatcher.feed_update(bot, callback_update(1904, data))
+    texts = [getattr(m, "text", "") or "" for m in session.methods]
+    if choice == "skip":
+        assert any("сегодня без напоминаний" in text for text in texts)
+    else:
+        expected = "18:30" if choice == "custom" else "18:00"
+        assert sum(f"Напомню за час — в {expected}" in text for text in texts) == 1
+    async with database.session() as db_session:
+        rows = list((await db_session.scalars(select(Reminder).where(Reminder.kind == "pre90"))).all())
+    assert len(rows) == (0 if choice == "skip" else 1)
+    await llm.close()
+    await bot.session.close()
+
+
 def test_consecutive_day_detection_wraps_across_week():
     assert not has_consecutive_days([0, 2, 4])
     assert has_consecutive_days([0, 1, 4])
@@ -140,7 +186,6 @@ async def test_start_and_complete_onboarding_through_dispatcher(app_services):
         callback_update(3, "onboarding:day:2"),
         callback_update(4, "onboarding:day:1"),
         callback_update(5, "onboarding:days_done"),
-        user_message(6, "19:00"),
         callback_update(7, "onboarding:frequency:3"),
         callback_update(8, "onboarding:place:gym"),
         callback_update(9, "onboarding:goal:regularity"),
@@ -187,7 +232,6 @@ async def test_gift_recipient_is_greeted_by_name_and_skips_name_input(app_servic
     updates = [
         user_message(101, "/start"),
         callback_update(102, "onboarding:days_done"),
-        user_message(103, "19:00"),
         callback_update(104, "onboarding:frequency:3"),
         callback_update(105, "onboarding:place:gym"),
         callback_update(106, "onboarding:goal:regularity"),
@@ -232,17 +276,10 @@ async def test_schedule_edit_warns_about_consecutive_days_without_blocking(app_s
     await dispatcher.feed_update(bot, callback_update(13, "schedule:day:1"))
     await dispatcher.feed_update(bot, callback_update(14, "schedule:days_done"))
 
-    assert await dispatcher.storage.get_state(workout_storage_key(bot)) == ScheduleEdit.workout_time.state
+    assert await dispatcher.storage.get_state(workout_storage_key(bot)) == ScheduleEdit.frequency.state
     sent_texts = [getattr(method, "text", "") or "" for method in session.methods]
     assert any("Лучше оставить между ними день восстановления" in text for text in sent_texts)
-    assert any("Новое время" in text for text in sent_texts)
-    time_prompt = next(
-        method
-        for method in session.methods
-        if "Новое время" in (getattr(method, "text", "") or "")
-    )
-    assert isinstance(time_prompt.reply_markup, ForceReply)
-    assert time_prompt.reply_markup.input_field_placeholder == "Например: 19:00"
+    assert any("07:00 по местному времени" in text for text in sent_texts)
     await llm.close()
     await bot.session.close()
 

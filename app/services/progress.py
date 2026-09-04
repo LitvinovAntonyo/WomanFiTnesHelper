@@ -79,7 +79,7 @@ class ProgressService:
                 .where(
                     Reminder.user_id == user.id,
                     Reminder.kind == "pre90",
-                    Reminder.status == "pending",
+                    Reminder.status.in_(("pending", "sent", "accepted")),
                     Reminder.workout_at > utc_now(),
                 )
                 .order_by(Reminder.workout_at)

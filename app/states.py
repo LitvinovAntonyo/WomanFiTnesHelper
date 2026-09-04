@@ -23,3 +23,7 @@ class RescheduleInput(StatesGroup):
 
 class WorkoutInput(StatesGroup):
     set_result = State()
+
+
+class DailyTimeInput(StatesGroup):
+    clock = State()

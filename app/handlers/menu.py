@@ -85,7 +85,9 @@ def build_menu_router(context: AppContext) -> Router:
         if user and user.settings and user.settings.paused_until:
             pause = f"\nПауза до: {user.settings.paused_until.strftime('%d.%m.%Y %H:%M')} UTC"
         await message.answer(
-            f"Настройки напоминаний.{pause}", reply_markup=settings_keyboard(enabled)
+            "В тренировочный день в 07:00 спрашиваю время, затем напоминаю за час.\n"
+            f"Твой часовой пояс: {user.settings.timezone if user and user.settings else context.settings.timezone}.{pause}",
+            reply_markup=settings_keyboard(enabled)
         )
 
     @router.callback_query(F.data == "settings:pause")
@@ -116,7 +118,7 @@ def build_menu_router(context: AppContext) -> Router:
             else [0, 2, 4]
         )
         await state.set_state(ScheduleEdit.days)
-        await state.update_data(days=selected)
+        await state.update_data(days=selected, workout_time=user.settings.workout_time if user and user.settings else "19:00")
         if callback.message:
             await callback.message.answer(
                 "Выбери новые дни тренировок.",
@@ -146,11 +148,12 @@ def build_menu_router(context: AppContext) -> Router:
             return
         if has_consecutive_days(data["days"]) and callback.message:
             await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
-        await state.set_state(ScheduleEdit.workout_time)
+        await state.set_state(ScheduleEdit.frequency)
         if callback.message:
             await callback.message.answer(
-                "Новое время в формате 19:00:",
-                reply_markup=text_input_reply("Например: 19:00"),
+                "Время выбирается отдельно в день тренировки, после вопроса в 07:00 по местному времени.\n"
+                f"Подтверди число тренировок: выбрано дней {len(data['days'])}.",
+                reply_markup=frequency_keyboard(prefix="schedule"),
             )
         await callback.answer()
 

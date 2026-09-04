@@ -18,23 +18,29 @@ from app.models import Reminder, User, UserSettings, WorkoutSession, WorkoutTemp
 
 logger = logging.getLogger(__name__)
 UTC = ZoneInfo("UTC")
-MORNING_MOTIVATION_TIME = time(9, 0)
-PRIMARY_REMINDER_LEAD_MINUTES = 120
+MORNING_MOTIVATION_TIME = time(7, 0)
+PRIMARY_REMINDER_LEAD_MINUTES = 60
 MORNING_MOTIVATIONS = (
-    "Не откладывай то, что ты выбрала для себя. Вечером не нужен идеальный настрой — "
-    "достаточно прийти и начать. Эта тренировка нужна не плану и не боту. Она нужна тебе.",
-    "Сегодня у тебя есть встреча с собой — тренировка. Не переноси заботу о себе на "
-    "«потом». Сделай сегодня то, за что завтра поблагодаришь себя.",
-    "Тренировка сегодня — не наказание и не долг перед кем-то. Это время, которое ты "
-    "вкладываешь в своё тело, силу и уверенность. Просто выполни сегодняшний шаг.",
-    "Не жди идеального настроения к вечеру. Решение уже принято: сегодня ты идёшь "
-    "тренироваться. Всё начинается с одного простого шага.",
-    "То, что важно лично тебе, легко отложить ради чужих дел. Сегодня сохрани время для "
-    "себя. Тренировка — часть этой заботы.",
-    "Не нужно сделать всё идеально. Важно не оставить себя на потом. Сегодняшняя "
-    "тренировка — маленькое обещание себе, которое стоит выполнить.",
-    "Сила складывается не из редких рывков, а из дней, когда ты просто пришла и сделала "
-    "своё. Сегодня один из таких дней.",
+    "Сегодня тренировка — немного времени только для тебя. Не нужно делать всё идеально, достаточно начать.",
+    "Сегодня встреча с собой — в спортивной форме 💛 Ты тоже заслуживаешь места в своём расписании.",
+    "Сегодня можно немного отвлечься от дел и переключиться на себя 🌿 Остальное ненадолго подождёт.",
+    "Сегодня тренировочный день 💪 Начнём спокойно, без гонки и лишних требований к себе.",
+    "Новый день — ещё одна возможность позаботиться о себе. Маленькие регулярные шаги важнее редких подвигов.",
+    "Давай заранее найдём время для сегодняшней тренировки 🗓 Когда время выбрано, собраться уже немного проще.",
+    "Сегодня не нужно побеждать весь мир — достаточно выделить время себе. Сделаем столько, сколько будет комфортно.",
+    "Спортивная форма сегодня ждёт своего выхода 😊 Можно начать без особого настроения и посмотреть, как пойдёт.",
+    "Пусть сегодня среди всех дел будет и одно для себя 🌸 Забота о себе — тоже важное дело.",
+    "Сегодня тренировка! Не сравниваем себя с тем, что было раньше: двигаемся из той точки, где ты сейчас.",
+    "Давай оставим в сегодняшнем расписании немного места для движения. Твой темп — вполне подходящий темп.",
+    "Сегодня продолжаем возвращать тренировки в привычную жизнь 🌿 Без спешки: привычка складывается из таких обычных дней.",
+    "Сегодня можно на время отложить заботы и сосредоточиться на себе. Не ради чужих ожиданий — ради тебя.",
+    "До тренировки пока только один маленький шаг — выбрать время 😊 Со всем остальным разберёмся по порядку.",
+    "Сегодня день движения! Не обязательно выкладываться на максимум, чтобы занятие имело смысл.",
+    "Давай сегодня поддержим себя не только добрыми словами, но и действием. Спокойная тренировка тоже считается.",
+    "В планах на сегодня — тренировка и немного внимания к себе. Ты не обязана быть в идеальной форме, чтобы заботиться о ней.",
+    "Сегодня ещё один шаг к привычке, которую ты создаёшь для себя 💛 Каждое занятие — отдельный маленький вклад.",
+    "Если день обещает быть насыщенным, давай заранее выберем время для зала. Пусть твои планы на себя тоже будут в приоритете.",
+    "Сегодня тренировка! Не проверяем, на что ты способна через силу, — просто продолжаем двигаться.",
 )
 PRE_WORKOUT_MOTIVATIONS = (
     "Сегодня без отговорок. Собирайся — на тренировке будет лучше, чем дома с чувством вины.",
@@ -95,7 +101,7 @@ def iter_workout_times(
 
 def is_quiet_hour(utc_value: datetime, timezone: str) -> bool:
     hour = utc_naive_to_local(utc_value, timezone).hour
-    return hour < 8 or hour >= 22
+    return hour < 7 or hour >= 22
 
 
 def safe_notification_time(workout_at: datetime, lead_minutes: int, timezone: str) -> datetime | None:
@@ -114,7 +120,7 @@ def safe_notification_time(workout_at: datetime, lead_minutes: int, timezone: st
 
 
 def morning_motivation_time(workout_at: datetime, timezone: str) -> datetime | None:
-    """Schedule a separate message at 09:00 local, only when it precedes the workout."""
+    """Return the 07:00 local prompt time for the given training date."""
     tz = ZoneInfo(timezone)
     workout_local = utc_naive_to_local(workout_at, timezone)
     candidate = datetime.combine(
@@ -125,10 +131,20 @@ def morning_motivation_time(workout_at: datetime, timezone: str) -> datetime | N
     return local_to_utc_naive(candidate)
 
 
-def morning_motivation_text(workout_at: datetime, timezone: str) -> str:
+def morning_motivation_text(workout_at: datetime, timezone: str, name: str = "") -> str:
     workout_date = utc_naive_to_local(workout_at, timezone).date()
     message = MORNING_MOTIVATIONS[workout_date.toordinal() % len(MORNING_MOTIVATIONS)]
-    return f"Доброе утро ☀️\nСегодня день тренировки.\n\n{message}"
+    greeting = f"Доброе утро, {name}!" if name else "Доброе утро!"
+    return f"{greeting} ☀️\n\n{message}\n\nВо сколько сегодня пойдём на тренировку? Время — твоё местное."
+
+
+def daily_time_keyboard(reminder_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"В {hour}:00", callback_data=f"daily:time:{reminder_id}:{hour}00")
+         for hour in (18, 19, 20)],
+        [InlineKeyboardButton(text="Другое время", callback_data=f"daily:custom:{reminder_id}")],
+        [InlineKeyboardButton(text="Сегодня не получится", callback_data=f"daily:skip:{reminder_id}")],
+    ])
 
 
 def pre_workout_motivation_text(workout_at: datetime, timezone: str) -> str:
@@ -143,6 +159,7 @@ class ReminderService:
         self.bot = bot
         self.scheduler = AsyncIOScheduler(timezone="UTC")
         self._tick_lock = asyncio.Lock()
+        self._choice_lock = asyncio.Lock()
         self.last_error: str | None = None
 
     @property
@@ -197,42 +214,29 @@ class ReminderService:
                 ).all()
             )
             created = 0
-            for workout_at in iter_workout_times(user_settings, start_utc=now):
-                schedule = (
-                    (
-                        "motivation",
-                        morning_motivation_time(workout_at, user_settings.timezone),
-                    ),
-                    (
-                        "pre90",
-                        safe_notification_time(
-                            workout_at,
-                            PRIMARY_REMINDER_LEAD_MINUTES,
-                            user_settings.timezone,
-                        ),
-                    ),
-                    (
-                        "pre10",
-                        safe_notification_time(workout_at, 10, user_settings.timezone),
-                    ),
-                )
-                for kind, scheduled_at in schedule:
-                    if (
-                        scheduled_at is None
-                        or scheduled_at <= now
-                        or (workout_at, kind) in existing
-                    ):
-                        continue
-                    session.add(
-                        Reminder(
-                            user_id=user_id,
-                            workout_at=workout_at,
-                            scheduled_at=scheduled_at,
-                            kind=kind,
-                        )
-                    )
-                    existing.add((workout_at, kind))
-                    created += 1
+            tz = ZoneInfo(user_settings.timezone)
+            today = utc_naive_to_local(now, user_settings.timezone).date()
+            selected_days = set(parse_days(user_settings.workout_days))
+            booked_times = await session.scalars(select(Reminder.workout_at).where(
+                Reminder.user_id == user_id, Reminder.kind == "pre90",
+                Reminder.status.in_(("pending", "sent", "accepted")), Reminder.workout_at > now,
+            ))
+            booked_dates = {utc_naive_to_local(at, user_settings.timezone).date()
+                            for at in booked_times}
+            for offset in range(36):
+                day = today + timedelta(days=offset)
+                if day.weekday() not in selected_days or day in booked_dates:
+                    continue
+                # The end-of-day anchor is NOT a workout time; it gives the prompt
+                # a stable per-user/date key and expires old buttons at midnight.
+                anchor = local_to_utc_naive(datetime.combine(day, time(23, 59, 59), tzinfo=tz))
+                scheduled_at = morning_motivation_time(anchor, user_settings.timezone)
+                if scheduled_at is None or scheduled_at <= now or (anchor, "daily_time") in existing:
+                    continue
+                session.add(Reminder(user_id=user_id, workout_at=anchor,
+                                     scheduled_at=scheduled_at, kind="daily_time"))
+                existing.add((anchor, "daily_time"))
+                created += 1
             return created
 
     async def rebuild_user_reminders(self, user_id: int) -> int:
@@ -240,6 +244,7 @@ class ReminderService:
             await session.execute(
                 delete(Reminder).where(
                     Reminder.user_id == user_id,
+                    Reminder.kind == "daily_time",
                     Reminder.status == "pending",
                     Reminder.scheduled_at > utc_now(),
                 )
@@ -278,7 +283,7 @@ class ReminderService:
 
     async def _deliver(self, reminder_id: int) -> None:
         assert self.bot is not None
-        async with self.database.session() as session:
+        async with self._choice_lock, self.database.session() as session:
             reminder = await session.scalar(
                 select(Reminder)
                 .options(selectinload(Reminder.user).selectinload(User.settings))
@@ -289,6 +294,9 @@ class ReminderService:
             if reminder.workout_at <= utc_now():
                 reminder.status = "expired"
                 return
+            if reminder.kind == "daily_time" and utc_now() - reminder.scheduled_at >= timedelta(hours=1):
+                reminder.status = "expired"
+                return
             user = reminder.user
             prefs = user.settings
             if prefs is None or not prefs.reminders_enabled:
@@ -297,11 +305,12 @@ class ReminderService:
             if prefs.paused_until and prefs.paused_until > utc_now():
                 reminder.status = "paused"
                 return
-            if is_quiet_hour(utc_now(), prefs.timezone):
+            local_hour = utc_naive_to_local(utc_now(), prefs.timezone).hour
+            if local_hour < 7 or local_hour >= 22:
                 return
-            if reminder.kind == "motivation":
-                text = morning_motivation_text(reminder.workout_at, prefs.timezone)
-                keyboard = None
+            if reminder.kind == "daily_time":
+                text = morning_motivation_text(reminder.workout_at, prefs.timezone, user.display_name or "")
+                keyboard = daily_time_keyboard(reminder.id)
             elif reminder.kind == "pre10":
                 confirmed = await session.scalar(
                     select(WorkoutSession).where(
@@ -343,9 +352,10 @@ class ReminderService:
                 template = templates[int(completed or 0) % len(templates)]
                 text = (
                     f"{pre_workout_motivation_text(reminder.workout_at, prefs.timezone)}\n\n"
+                    f"Напоминаю: сегодня тренировка в {utc_naive_to_local(reminder.workout_at, prefs.timezone):%H:%M} по твоему местному времени.\n"
                     f"Тренировка №{int(completed or 0) + 1}.\n"
-                    f"Около 45 минут. Сегодня: {template.name.lower()}.\n\n"
-                    "Ты сегодня идёшь?"
+                    f"Около 50–60 минут. Сегодня: {template.name.lower()}.\n\n"
+                    "Всё в силе?"
                 )
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -363,6 +373,56 @@ class ReminderService:
                 reminder.last_error = f"{type(exc).__name__}: {exc}"[:500]
                 raise
             reminder.status = "sent"
+
+    async def choose_daily_time(
+        self, reminder_id: int, telegram_id: int, clock: str | None
+    ) -> tuple[datetime, datetime | None] | None:
+        """Persist one owned, same-day choice; no reminder exists until this call."""
+        async with self._choice_lock, self.database.session() as session:
+            reminder = await session.scalar(
+                select(Reminder).join(User)
+                .options(selectinload(Reminder.user).selectinload(User.settings))
+                .where(Reminder.id == reminder_id, User.telegram_id == telegram_id,
+                       Reminder.kind == "daily_time")
+            )
+            if reminder is None or reminder.user.settings is None:
+                raise ValueError("Вопрос о времени не найден.")
+            prefs = reminder.user.settings
+            now = utc_now()
+            local_now = utc_naive_to_local(now, prefs.timezone)
+            day = utc_naive_to_local(reminder.workout_at, prefs.timezone).date()
+            if day != local_now.date():
+                raise ValueError("Этот вопрос был на другой день. Выбери сегодняшнее сообщение.")
+            if reminder.status not in ("pending", "sent"):
+                raise ValueError("Ответ уже сохранён. Повторно выбирать время не нужно.")
+            if not prefs.reminders_enabled or (prefs.paused_until and prefs.paused_until > now):
+                raise ValueError("Напоминания на паузе или отключены. Сначала включи их в настройках.")
+            if clock is None:
+                reminder.status = "skipped"
+                reminder.responded_at = now
+                return None
+            try:
+                parsed = datetime.strptime(clock, "%H:%M").time()
+            except ValueError as exc:
+                raise ValueError("Напиши время как 19:00, с 08:00 до 22:00.") from exc
+            if not time(8) <= parsed <= time(22):
+                raise ValueError("Выбери время с 08:00 до 22:00.")
+            workout_at = local_to_utc_naive(datetime.combine(day, parsed, tzinfo=ZoneInfo(prefs.timezone)))
+            if workout_at <= now:
+                raise ValueError("Это время уже прошло. Выбери более позднее время сегодня.")
+            due = workout_at - timedelta(minutes=PRIMARY_REMINDER_LEAD_MINUTES)
+            existing = await session.scalar(select(Reminder.id).where(
+                Reminder.user_id == reminder.user_id, Reminder.workout_at == workout_at,
+                Reminder.kind == "pre90",
+            ))
+            if existing is not None:
+                raise ValueError("На это время тренировка уже запланирована.")
+            session.add(Reminder(user_id=reminder.user_id, workout_at=workout_at,
+                                 scheduled_at=due, kind="pre90",
+                                 status="pending" if due > now else "sent"))
+            reminder.status = "chosen"
+            reminder.responded_at = now
+            return workout_at, due if due > now else None
 
     async def skip(self, reminder_id: int, telegram_id: int) -> datetime | None:
         async with self.database.session() as session:
@@ -416,27 +476,18 @@ class ReminderService:
                 .values(status="postponed", responded_at=utc_now())
             )
             timezone = reminder.user.settings.timezone if reminder.user.settings else "UTC"
-            schedule = (
-                ("motivation", morning_motivation_time(new_workout_at, timezone)),
-                (
-                    "pre90",
-                    safe_notification_time(
-                        new_workout_at,
-                        PRIMARY_REMINDER_LEAD_MINUTES,
-                        timezone,
-                    ),
-                ),
-                ("pre10", safe_notification_time(new_workout_at, 10, timezone)),
-            )
+            local_clock = utc_naive_to_local(new_workout_at, timezone).time()
+            if not time(8) <= local_clock <= time(22):
+                raise ValueError("Выбери время с 08:00 до 22:00 по местному времени.")
+            schedule = (("pre90", new_workout_at - timedelta(minutes=60)),)
             for kind, scheduled_at in schedule:
-                if scheduled_at is None or scheduled_at <= utc_now():
-                    continue
                 session.add(
                     Reminder(
                         user_id=reminder.user_id,
                         workout_at=new_workout_at,
                         scheduled_at=scheduled_at,
                         kind=kind,
+                        status="pending" if scheduled_at > utc_now() else "sent",
                     )
                 )
             try:
@@ -450,6 +501,16 @@ class ReminderService:
                 select(UserSettings.timezone).join(User).where(User.telegram_id == telegram_id)
             )
             return timezone or self.settings.timezone
+
+    async def reminder_local_time(self, reminder_id: int, telegram_id: int) -> datetime:
+        async with self.database.session() as session:
+            reminder = await session.scalar(select(Reminder).join(User)
+                .options(selectinload(Reminder.user).selectinload(User.settings))
+                .where(Reminder.id == reminder_id, User.telegram_id == telegram_id,
+                       Reminder.kind == "pre90"))
+            if reminder is None or reminder.user.settings is None:
+                raise ValueError("Тренировка не найдена.")
+            return utc_naive_to_local(reminder.workout_at, reminder.user.settings.timezone)
 
     async def user_id(self, telegram_id: int) -> int:
         async with self.database.session() as session:

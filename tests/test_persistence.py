@@ -56,7 +56,7 @@ async def test_v3_schema_persists_set_rows_and_session_feedback(
     assert saved_set.weight_kg == Decimal("25.00")
     assert feedback is not None
     assert feedback.effort == "ok"
-    assert version == 3
+    assert version == 4
     await reopened.close()
 
 

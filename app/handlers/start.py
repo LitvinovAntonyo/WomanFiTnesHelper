@@ -114,11 +114,14 @@ def build_start_router(context: AppContext) -> Router:
             return
         if has_consecutive_days(data["days"]) and callback.message:
             await callback.message.answer(CONSECUTIVE_DAYS_WARNING)
-        await state.set_state(Onboarding.workout_time)
+        await state.update_data(workout_time="19:00")
+        await state.set_state(Onboarding.frequency)
         if callback.message:
             await callback.message.answer(
-                "Во сколько обычно удобно? Напиши в формате 19:00.",
-                reply_markup=text_input_reply("Например: 19:00"),
+                "В тренировочные дни в 07:00 по твоему местному времени спрошу, во сколько идём. "
+                "После выбора напомню за час.\n\n"
+                f"Сколько тренировок в неделю? Сейчас выбрано дней: {len(data['days'])}.",
+                reply_markup=frequency_keyboard(),
             )
         await callback.answer()
 

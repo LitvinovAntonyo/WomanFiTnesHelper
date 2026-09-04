@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
@@ -31,7 +31,7 @@ from app.keyboards import RESET_TODAY_TEXT, menu_keyboard, text_input_reply
 from app.models import WorkoutSession
 from app.services.scheduler import local_to_utc_naive, utc_naive_to_local
 from app.services.workouts import SetLogState, WorkoutStep
-from app.states import RescheduleInput, WorkoutInput
+from app.states import DailyTimeInput, RescheduleInput, WorkoutInput
 
 SET_INPUT_HINT = (
     "Напиши вес и повторения через пробел, например: 25 12.\n"
@@ -350,7 +350,7 @@ def build_workout_router(context: AppContext) -> Router:
     rest_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
     async def clear_pending_set_input(state: FSMContext) -> None:
-        if await state.get_state() == WorkoutInput.set_result.state:
+        if await state.get_state() in (WorkoutInput.set_result.state, DailyTimeInput.clock.state):
             await state.clear()
 
     async def send_current_step(
@@ -953,7 +953,7 @@ def build_workout_router(context: AppContext) -> Router:
             await callback.answer("Настройки не найдены", show_alert=True)
             return
         tz = ZoneInfo(user.settings.timezone)
-        clock = time.fromisoformat(user.settings.workout_time)
+        clock = (await context.reminders.reminder_local_time(int(raw_id), callback.from_user.id)).time()
         local_date = (datetime.now(tz) + timedelta(days=int(raw_days))).date()
         local_value = datetime.combine(local_date, clock, tzinfo=tz)
         await context.reminders.reschedule(
